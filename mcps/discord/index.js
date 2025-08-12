@@ -1,9 +1,11 @@
 const express = require('express');
 const axios = require('axios');
 const winston = require('winston');
+const dotenv = require('dotenv');
 const cors = require('cors');
 
-// Environment variables are loaded from the root project
+// Load environment variables
+dotenv.config({ path: '../../.env' });
 
 // Configure logger
 const logger = winston.createLogger({
