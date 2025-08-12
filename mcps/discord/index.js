@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, Events } = require('discord.js');
 const winston = require('winston');
 const express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 // Load environment variables
 dotenv.config();
@@ -33,6 +34,60 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
+app.use(cors());
+
+// SSE endpoint for gemini-cli MCP integration
+app.get('/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connection', status: 'established' })}\n\n`);
+  
+  // Keep the connection alive with a ping every 30 seconds
+  const pingInterval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
+  }, 30000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    logger.info('SSE client disconnected');
+  });
+  
+  logger.info('SSE client connected');
+});
+
+// MCP tool schema endpoint
+app.get('/schema', (req, res) => {
+  const toolSchema = {
+    name: 'discord',
+    description: 'Discord integration for sending and receiving messages',
+    functions: [
+      {
+        name: 'send_message',
+        description: 'Send a message to a Discord channel',
+        parameters: {
+          type: 'object',
+          properties: {
+            channelId: {
+              type: 'string',
+              description: 'The Discord channel ID to send the message to'
+            },
+            message: {
+              type: 'string',
+              description: 'The message content to send'
+            }
+          },
+          required: ['channelId', 'message']
+        }
+      }
+    ]
+  };
+  
+  res.json(toolSchema);
+});
 
 // API endpoint to send messages to Discord
 app.post('/api/send-message', async (req, res) => {
@@ -100,7 +155,8 @@ async function start() {
   try {
     // Start API server
     app.listen(PORT, () => {
-      logger.info(`API server listening on port ${PORT}`);
+      logger.info(`Discord MCP server listening on port ${PORT}`);
+      logger.info(`SSE endpoint available at http://localhost:${PORT}/sse`);
     });
     
     // Login to Discord

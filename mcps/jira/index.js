@@ -2,6 +2,7 @@ const JiraClient = require('jira-client');
 const winston = require('winston');
 const express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 // Load environment variables
 dotenv.config();
@@ -34,6 +35,92 @@ const app = express();
 const PORT = process.env.PORT || 3003;
 
 app.use(express.json());
+app.use(cors());
+
+// SSE endpoint for gemini-cli MCP integration
+app.get('/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connection', status: 'established' })}\n\n`);
+  
+  // Keep the connection alive with a ping every 30 seconds
+  const pingInterval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
+  }, 30000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    logger.info('SSE client disconnected');
+  });
+  
+  logger.info('SSE client connected');
+});
+
+// MCP tool schema endpoint
+app.get('/schema', (req, res) => {
+  const toolSchema = {
+    name: 'jira',
+    description: 'Jira integration for task management',
+    functions: [
+      {
+        name: 'get_task',
+        description: 'Get details of a Jira task',
+        parameters: {
+          type: 'object',
+          properties: {
+            taskId: {
+              type: 'string',
+              description: 'The Jira task ID'
+            }
+          },
+          required: ['taskId']
+        }
+      },
+      {
+        name: 'update_task_status',
+        description: 'Update the status of a Jira task',
+        parameters: {
+          type: 'object',
+          properties: {
+            taskId: {
+              type: 'string',
+              description: 'The Jira task ID'
+            },
+            statusId: {
+              type: 'string',
+              description: 'The status ID to set'
+            }
+          },
+          required: ['taskId', 'statusId']
+        }
+      },
+      {
+        name: 'add_comment',
+        description: 'Add a comment to a Jira task',
+        parameters: {
+          type: 'object',
+          properties: {
+            taskId: {
+              type: 'string',
+              description: 'The Jira task ID'
+            },
+            comment: {
+              type: 'string',
+              description: 'Comment text to add'
+            }
+          },
+          required: ['taskId', 'comment']
+        }
+      }
+    ]
+  };
+  
+  res.json(toolSchema);
+});
 
 // API endpoint to get task details
 app.get('/api/task/:taskId', async (req, res) => {
@@ -141,5 +228,6 @@ app.get('/api/tasks', async (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-  logger.info(`Jira MCP API server listening on port ${PORT}`);
+  logger.info(`Jira MCP server listening on port ${PORT}`);
+  logger.info(`SSE endpoint available at http://localhost:${PORT}/sse`);
 });

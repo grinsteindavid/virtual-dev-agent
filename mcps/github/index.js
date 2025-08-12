@@ -2,6 +2,7 @@ const { Octokit } = require('@octokit/rest');
 const winston = require('winston');
 const express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 // Load environment variables
 dotenv.config();
@@ -29,6 +30,86 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 app.use(express.json());
+app.use(cors());
+
+// SSE endpoint for gemini-cli MCP integration
+app.get('/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connection', status: 'established' })}\n\n`);
+  
+  // Keep the connection alive with a ping every 30 seconds
+  const pingInterval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
+  }, 30000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    logger.info('SSE client disconnected');
+  });
+  
+  logger.info('SSE client connected');
+});
+
+// MCP tool schema endpoint
+app.get('/schema', (req, res) => {
+  const toolSchema = {
+    name: 'github',
+    description: 'GitHub integration for repository management',
+    functions: [
+      {
+        name: 'create_branch',
+        description: 'Create a new branch in the repository',
+        parameters: {
+          type: 'object',
+          properties: {
+            branchName: {
+              type: 'string',
+              description: 'Name of the branch to create'
+            },
+            baseBranch: {
+              type: 'string',
+              description: 'Base branch to create from (default: main)'
+            }
+          },
+          required: ['branchName']
+        }
+      },
+      {
+        name: 'create_pr',
+        description: 'Create a pull request',
+        parameters: {
+          type: 'object',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Title of the pull request'
+            },
+            body: {
+              type: 'string',
+              description: 'Description of the pull request'
+            },
+            head: {
+              type: 'string',
+              description: 'Head branch name'
+            },
+            base: {
+              type: 'string',
+              description: 'Base branch name (default: main)'
+            }
+          },
+          required: ['title', 'head']
+        }
+      }
+    ]
+  };
+  
+  res.json(toolSchema);
+});
 
 // API endpoint to create a branch
 app.post('/api/create-branch', async (req, res) => {
@@ -164,5 +245,6 @@ app.get('/api/repo-status', async (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-  logger.info(`GitHub MCP API server listening on port ${PORT}`);
+  logger.info(`GitHub MCP server listening on port ${PORT}`);
+  logger.info(`SSE endpoint available at http://localhost:${PORT}/sse`);
 });

@@ -8,6 +8,7 @@ services:
     volumes:
       - ./gemini-cli:/app
       - ./gemini-cli/GEMINI.md:/app/GEMINI.md
+      - ./gemini-cli/settings.json:/app/.gemini/settings.json
     environment:
       # Load the API key from a .env file in the same directory
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -21,6 +22,8 @@ services:
       - discord-mcp
       - github-mcp
       - jira-mcp
+    networks:
+      - virtual-dev-network
   # Discord MCP service
   discord-mcp:
     build:
@@ -31,7 +34,12 @@ services:
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - PORT=3001
+    ports:
+      - "3001:3001"
     restart: unless-stopped
+    networks:
+      - virtual-dev-network
 
   # GitHub MCP service
   github-mcp:
@@ -44,7 +52,12 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_REPO=${GITHUB_REPO}
       - GITHUB_OWNER=${GITHUB_OWNER}
+      - PORT=3002
+    ports:
+      - "3002:3002"
     restart: unless-stopped
+    networks:
+      - virtual-dev-network
 
   # Jira MCP service
   jira-mcp:
@@ -58,8 +71,13 @@ services:
       - JIRA_USERNAME=${JIRA_USERNAME}
       - JIRA_API_TOKEN=${JIRA_API_TOKEN}
       - JIRA_PROJECT=${JIRA_PROJECT}
+      - PORT=3003
+    ports:
+      - "3003:3003"
     restart: unless-stopped
+    networks:
+      - virtual-dev-network
 
 networks:
-  default:
+  virtual-dev-network:
     name: virtual-dev-network
