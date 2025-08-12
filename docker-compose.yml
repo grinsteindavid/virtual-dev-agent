@@ -9,6 +9,7 @@ services:
       - ./gemini-cli:/app
       - ./gemini-cli/GEMINI.md:/app/GEMINI.md
       - ./gemini-cli/settings.json:/app/.gemini/settings.json
+      - ./plan.md:/app/plan.md
     environment:
       # Load the API key from a .env file in the same directory
       - GEMINI_API_KEY=${GEMINI_API_KEY}

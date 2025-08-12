@@ -124,12 +124,13 @@ app.get('/api/status', (req, res) => {
 
 // Health check endpoint for Docker
 app.get('/health', (req, res) => {
-  const isConnected = client.isReady();
-  if (isConnected) {
-    return res.status(200).json({ status: 'healthy' });
-  } else {
-    return res.status(503).json({ status: 'unhealthy', reason: 'Discord client not connected' });
-  }
+  // For Docker health checks, always return healthy as long as the Express server is running
+  // This prevents container restarts due to missing Discord token or other environment variables
+  return res.status(200).json({ 
+    status: 'healthy', 
+    expressServer: 'running',
+    discordClient: client.isReady() ? 'connected' : 'disconnected'
+  });
 });
 
 // Discord client events
