@@ -1,6 +1,6 @@
 # Gemini CLI Guidelines
 
-This document provides guidelines for the Gemini CLI when working with the Virtual Developer Agent. These instructions ensure consistent, high-quality code development when processing Jira tasks.
+This document provides guidelines for the Gemini CLI when working with the Virtual Developer Agent. These instructions ensure consistent, high-quality code development when processing Jira tasks. Since the CLI runs in a Docker container with no user interaction, all processes must execute automatically without prompting for input.
 
 ## Core Principles
 
@@ -8,6 +8,7 @@ This document provides guidelines for the Gemini CLI when working with the Virtu
 2. **Comprehensive Logging**: Include detailed logging for debugging and monitoring
 3. **Code Quality**: Follow best practices for clean, maintainable code
 4. **Documentation**: Document all code thoroughly
+5. **Non-Interactive Execution**: All processes must run without requiring user input
 
 ## Project Setup
 
@@ -172,22 +173,22 @@ describe('ComponentName', () => {
 
 ## Execution Guidelines
 
-When executing tasks, the virtual developer should:
+When executing tasks in the non-interactive Docker environment, the virtual developer should:
 
-1. Install dependencies: `npm install`
-2. Run tests continuously during development: `npm test`
-3. Monitor test coverage
-4. Analyze test failures and fix issues
-5. Document any assumptions or decisions made
-6. Ensure all tests pass before submitting code
+1. Install dependencies automatically: `npm install --no-audit --no-fund --silent`
+2. Run tests in CI mode: `npm test -- --watchAll=false --ci --silent`
+3. Programmatically check test coverage
+4. Automatically analyze test failures and apply fixes
+5. Document all assumptions and decisions in code comments and logs
+6. Verify all tests pass before code submission without user confirmation
 
 ## Reporting
 
-After completing a task, generate a report including:
+After completing a task, automatically generate a report including:
 
 1. Test coverage statistics
 2. Passed/failed test counts
 3. Implementation notes
 4. Any known limitations or future improvements
 
-This report should be included in the pull request description and referenced in the Jira ticket.
+This report should be programmatically added to the pull request description and automatically linked in the Jira ticket without requiring user intervention.
