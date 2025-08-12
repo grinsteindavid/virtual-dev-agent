@@ -1,11 +1,9 @@
-const { Client, GatewayIntentBits, Events } = require('discord.js');
-const winston = require('winston');
 const express = require('express');
-const dotenv = require('dotenv');
+const axios = require('axios');
+const winston = require('winston');
 const cors = require('cors');
 
-// Load environment variables
-dotenv.config();
+// Environment variables are loaded from the root project
 
 // Configure logger
 const logger = winston.createLogger({
@@ -20,14 +18,7 @@ const logger = winston.createLogger({
   ]
 });
 
-// Initialize Discord client
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
+// No Discord client initialization needed for webhook implementation
 
 // Initialize API server
 const app = express();
@@ -63,24 +54,24 @@ app.get('/sse', (req, res) => {
 app.get('/schema', (req, res) => {
   const toolSchema = {
     name: 'discord',
-    description: 'Discord integration for sending and receiving messages',
+    description: 'Discord integration for sending messages via webhook',
     functions: [
       {
         name: 'send_message',
-        description: 'Send a message to a Discord channel',
+        description: 'Send a message to a Discord channel via webhook',
         parameters: {
           type: 'object',
           properties: {
-            channelId: {
-              type: 'string',
-              description: 'The Discord channel ID to send the message to'
-            },
             message: {
               type: 'string',
               description: 'The message content to send'
+            },
+            title: {
+              type: 'string',
+              description: 'Optional: Title for the message'
             }
           },
-          required: ['channelId', 'message']
+          required: ['message']
         }
       }
     ]
@@ -89,91 +80,75 @@ app.get('/schema', (req, res) => {
   res.json(toolSchema);
 });
 
-// API endpoint to send messages to Discord
+// API endpoint to send messages to Discord via webhook
 app.post('/api/send-message', async (req, res) => {
   try {
-    const { channelId, message } = req.body;
+    const { message, title } = req.body;
+    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
     
-    if (!channelId || !message) {
-      return res.status(400).json({ error: 'Missing channelId or message' });
+    if (!webhookUrl) {
+      return res.status(500).json({ error: 'Discord webhook URL not configured' });
     }
     
-    const channel = await client.channels.fetch(channelId);
-    if (!channel) {
-      return res.status(404).json({ error: 'Channel not found' });
+    if (!message) {
+      return res.status(400).json({ error: 'Missing message content' });
     }
     
-    await channel.send(message);
-    logger.info('Message sent to Discord', { channelId, message });
+    const payload = {
+      content: message
+    };
+    
+    // Add title as embed if provided
+    if (title) {
+      payload.embeds = [{
+        title: title
+      }];
+    }
+    
+    await axios.post(webhookUrl, payload);
+    logger.info('Message sent to Discord webhook', { message, title });
     
     return res.status(200).json({ success: true });
   } catch (error) {
-    logger.error('Error sending message to Discord', { error: error.message });
+    logger.error('Error sending message to Discord webhook', { error: error.message });
     return res.status(500).json({ error: error.message });
   }
 });
 
 // API endpoint to get status updates
 app.get('/api/status', (req, res) => {
-  const isConnected = client.isReady();
   return res.status(200).json({ 
-    status: isConnected ? 'connected' : 'disconnected',
-    uptime: isConnected ? client.uptime : 0
+    status: 'ready',
+    webhookConfigured: !!process.env.DISCORD_WEBHOOK_URL
   });
 });
 
 // Health check endpoint for Docker
 app.get('/health', (req, res) => {
   // For Docker health checks, always return healthy as long as the Express server is running
-  // This prevents container restarts due to missing Discord token or other environment variables
   return res.status(200).json({ 
     status: 'healthy', 
     expressServer: 'running',
-    discordClient: client.isReady() ? 'connected' : 'disconnected'
+    webhookConfigured: !!process.env.DISCORD_WEBHOOK_URL
   });
 });
 
-// Discord client events
-client.once(Events.ClientReady, () => {
-  logger.info('Discord bot is ready', { username: client.user.tag });
-});
+// No Discord client events needed for webhook implementation
 
-client.on(Events.MessageCreate, async (message) => {
-  // Ignore messages from bots
-  if (message.author.bot) return;
-  
-  // Log received messages
-  logger.info('Message received', { 
-    author: message.author.tag,
-    content: message.content,
-    channelId: message.channelId
-  });
-  
-  // Process commands or mentions
-  if (message.mentions.has(client.user)) {
-    logger.info('Bot mentioned', { 
-      author: message.author.tag,
-      content: message.content
-    });
-    
-    // Respond to mentions
-    await message.reply('Virtual Developer Agent is listening. How can I help?');
-  }
-});
-
-// Start the server and connect to Discord
-async function start() {
+// Start the server
+function start() {
   try {
     // Start API server
     app.listen(PORT, () => {
-      logger.info(`Discord MCP server listening on port ${PORT}`);
+      logger.info(`Discord Webhook MCP server listening on port ${PORT}`);
       logger.info(`SSE endpoint available at http://localhost:${PORT}/sse`);
+      
+      if (!process.env.DISCORD_WEBHOOK_URL) {
+        logger.warn('DISCORD_WEBHOOK_URL environment variable not set');
+      }
     });
-    
-    // Login to Discord
-    await client.login(process.env.DISCORD_TOKEN);
   } catch (error) {
-    logger.error('Failed to start Discord MCP', { error: error.message });
+    logger.error('Failed to start Discord Webhook MCP', { error: error.message });
     process.exit(1);
   }
 }

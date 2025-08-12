@@ -8,8 +8,8 @@ services:
     volumes:
       - ./gemini-cli:/app
       - ./gemini-cli/GEMINI.md:/app/GEMINI.md
-      - ./gemini-cli/settings.json:/app/.gemini/settings.json
       - ./plan.md:/app/plan.md
+      - ./gemini-cli/settings.json:/app/.gemini/settings.json
     environment:
       # Load the API key from a .env file in the same directory
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -18,7 +18,7 @@ services:
       # The value should be the path *inside the container*.
       - GEMINI_SYSTEM_MD=/app/GEMINI.md
     restart: unless-stopped
-    command: ["gemini", "-y", "-p", "@./plan.md", "--model", "gemini-2.5-flash-lite"]
+    command: ["gemini", "--model", "gemini-2.5-flash-lite","-y", "-p", "@./plan.md", "--settings", "/app/.gemini/settings.json"]
     depends_on:
       - discord-mcp
       - github-mcp
