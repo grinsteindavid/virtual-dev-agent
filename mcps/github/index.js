@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: '../../.env' });
 
 // Configure logger
 const logger = winston.createLogger({
