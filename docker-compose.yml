@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Developer agent service - always rebuilt when docker-compose is executed
+  developer:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./boilerplate:/app
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - discord-mcp
+      - github-mcp
+      - jira-mcp
+      - gemini-cli
+
+  # Discord MCP service
+  discord-mcp:
+    build:
+      context: ./mcps/discord
+      dockerfile: Dockerfile
+    volumes:
+      - ./mcps/discord:/app
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+    restart: unless-stopped
+
+  # GitHub MCP service
+  github-mcp:
+    build:
+      context: ./mcps/github
+      dockerfile: Dockerfile
+    volumes:
+      - ./mcps/github:/app
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+    restart: unless-stopped
+
+  # Jira MCP service
+  jira-mcp:
+    build:
+      context: ./mcps/jira
+      dockerfile: Dockerfile
+    volumes:
+      - ./mcps/jira:/app
+    environment:
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_USERNAME=${JIRA_USERNAME}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - JIRA_PROJECT=${JIRA_PROJECT}
+    restart: unless-stopped
+
+  # Gemini CLI service
+  gemini-cli:
+    build:
+      context: ./gemini-cli
+      dockerfile: Dockerfile
+    volumes:
+      - ./gemini-cli:/app
+      - ./gemini-cli/GEMINI.md:/app/GEMINI.md
+    environment:
+      # Load the API key from a .env file in the same directory
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Set GEMINI_SYSTEM_MD to load your custom GEMINI.md as the primary system instruction
+      # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
+      # The value should be the path *inside the container*.
+      - GEMINI_SYSTEM_MD=/app/GEMINI.md
+    restart: unless-stopped
+    command: ["gemini", "-p", "@./plan.md"]
+
+networks:
+  default:
+    name: virtual-dev-network
