@@ -4,12 +4,12 @@ module.exports = {
   
   // Transform JSX and ES modules
   transform: {
-    '^.+\.(js|jsx|ts|tsx)$': 'babel-jest',
+    '^.+.(js|jsx|ts|tsx)$': 'babel-jest',
   },
   
   // Ignore transformations for node_modules except for specific packages if needed
   transformIgnorePatterns: [
-    '/node_modules/(?!react-router|react-router-dom).+\.js$'
+    '/node_modules/(?!react-router|react-router-dom).+.js$'
   ],
   
   // Test environment
@@ -32,8 +32,8 @@ module.exports = {
   
   // Module name mapper for CSS and other non-JS files
   moduleNameMapper: {
-    '\.(css|less|scss|sass)$': '<rootDir>/src/__mocks__/styleMock.js',
-    '\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': '<rootDir>/src/__mocks__/fileMock.js'
+    '.(css|less|scss|sass)$': '<rootDir>/src/__mocks__/styleMock.js',
+    '.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': '<rootDir>/src/__mocks__/fileMock.js'
   },
   
   // Roots for module resolution
