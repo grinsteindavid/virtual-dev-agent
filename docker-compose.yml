@@ -33,8 +33,7 @@ services:
     volumes:
       - ./mcps/discord:/app
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - PORT=3001
     ports:
       - "3001:3001"
