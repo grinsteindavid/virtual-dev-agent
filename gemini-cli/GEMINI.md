@@ -9,6 +9,20 @@ This document provides guidelines for the Gemini CLI when working with the Virtu
 3. **Code Quality**: Follow best practices for clean, maintainable code
 4. **Documentation**: Document all code thoroughly
 
+## Project Setup
+
+Always begin by checking that project dependencies are installed:
+
+```bash
+npm install
+```
+
+Only consider a task complete when all tests pass:
+
+```bash
+npm test -- --watchAll=false
+```
+
 ## Testing Requirements
 
 ### Jest Test Files
@@ -160,11 +174,12 @@ describe('ComponentName', () => {
 
 When executing tasks, the virtual developer should:
 
-1. Run tests continuously during development
-2. Monitor test coverage
-3. Analyze test failures and fix issues
-4. Document any assumptions or decisions made
-5. Ensure all tests pass before submitting code
+1. Install dependencies: `npm install`
+2. Run tests continuously during development: `npm test`
+3. Monitor test coverage
+4. Analyze test failures and fix issues
+5. Document any assumptions or decisions made
+6. Ensure all tests pass before submitting code
 
 ## Reporting
 
