@@ -122,6 +122,16 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Health check endpoint for Docker
+app.get('/health', (req, res) => {
+  const isConnected = client.isReady();
+  if (isConnected) {
+    return res.status(200).json({ status: 'healthy' });
+  } else {
+    return res.status(503).json({ status: 'unhealthy', reason: 'Discord client not connected' });
+  }
+});
+
 // Discord client events
 client.once(Events.ClientReady, () => {
   logger.info('Discord bot is ready', { username: client.user.tag });

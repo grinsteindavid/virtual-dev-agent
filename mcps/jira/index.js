@@ -226,6 +226,20 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
+// Health check endpoint for Docker
+app.get('/health', (req, res) => {
+  try {
+    // Basic check to verify Jira configuration exists
+    if (!process.env.JIRA_URL || !process.env.JIRA_USERNAME || !process.env.JIRA_API_TOKEN) {
+      return res.status(503).json({ status: 'unhealthy', reason: 'Jira credentials not fully configured' });
+    }
+    return res.status(200).json({ status: 'healthy' });
+  } catch (error) {
+    logger.error('Health check failed', { error: error.message });
+    return res.status(503).json({ status: 'unhealthy', reason: error.message });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
   logger.info(`Jira MCP server listening on port ${PORT}`);

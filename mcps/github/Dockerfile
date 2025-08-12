@@ -3,8 +3,8 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Install dependencies including git
-RUN apk add --no-cache git
+# Install dependencies including git and curl for healthchecks
+RUN apk add --no-cache git curl
 
 # Copy package files and install dependencies
 COPY package.json package-lock.json* ./

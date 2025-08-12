@@ -3,6 +3,9 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
+# Install curl for healthchecks
+RUN apk --no-cache add curl
+
 # Install dependencies
 COPY package.json package-lock.json* ./
 RUN npm ci

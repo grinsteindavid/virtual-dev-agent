@@ -243,6 +243,20 @@ app.get('/api/repo-status', async (req, res) => {
   }
 });
 
+// Health check endpoint for Docker
+app.get('/health', (req, res) => {
+  try {
+    // Basic check to verify GitHub token exists
+    if (!process.env.GITHUB_TOKEN) {
+      return res.status(503).json({ status: 'unhealthy', reason: 'GitHub token not configured' });
+    }
+    return res.status(200).json({ status: 'healthy' });
+  } catch (error) {
+    logger.error('Health check failed', { error: error.message });
+    return res.status(503).json({ status: 'unhealthy', reason: error.message });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
   logger.info(`GitHub MCP server listening on port ${PORT}`);
