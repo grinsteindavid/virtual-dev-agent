@@ -30,10 +30,11 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 ### Repository Setup
 
-1. **Fetch GitHub Project**: Always start by fetching the GitHub project using environment variables:
+1. **Fetch GitHub Project**: Always start by fetching the GitHub project using the repository URL environment variable:
    ```bash
-   git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
+   git clone ${GITHUB_REPOSITORY_URL} .
    ```
+   - `GITHUB_REPOSITORY_URL`: Full repository URL available as an environment variable (format: https://github.com/owner/repo)
    - `GITHUB_TOKEN`: Authentication token for GitHub access
    - `GITHUB_OWNER`: Owner of the repository (username or organization)
    - `GITHUB_REPO`: Name of the repository
@@ -50,7 +51,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 1. Install dependencies automatically:
    ```bash
-   npm install --no-audit --no-fund --silent
+   npm install
    ```
 
 ## 2. Task Analysis
@@ -206,7 +207,7 @@ Add logs at these critical points:
 
 Execute Jest tests in CI mode:
 ```bash
-npm test -- --watchAll=false --ci --silent
+npm test -- --watchAll=false
 ```
 
 ### Analyze and Fix

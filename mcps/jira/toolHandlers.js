@@ -51,7 +51,8 @@ export const getTaskTool = {
         id: issue.id,
         key: issue.key,
         summary: issue.fields.summary,
-        description: issue.fields.description || 'No description',
+        attachments: JSON.stringify(issue.fields.attachment) || 'No attachments',
+        description: JSON.stringify(issue.fields.description) || 'No description',
         status: issue.fields.status.name,
         assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
         priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
@@ -68,6 +69,7 @@ export const getTaskTool = {
                 `Status: ${taskDetails.status}\n` +
                 `Assignee: ${taskDetails.assignee}\n` +
                 `Priority: ${taskDetails.priority}\n` +
+                `Attachments: ${taskDetails.attachments}\n` +
                 `Description: ${taskDetails.description}\n` +
                 `Created: ${taskDetails.created}\n` +
                 `Updated: ${taskDetails.updated}`
