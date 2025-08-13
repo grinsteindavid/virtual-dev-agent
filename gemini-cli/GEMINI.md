@@ -195,6 +195,16 @@ This report should be programmatically added to the pull request description and
 
 ## Git Workflow Guidelines
 
+### Repository Setup
+
+1. **Fetch GitHub Project**: Always start by fetching the GitHub project using environment variables:
+   ```bash
+   git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
+   ```
+   - `GITHUB_TOKEN`: Authentication token for GitHub access
+   - `GITHUB_OWNER`: Owner of the repository (username or organization)
+   - `GITHUB_REPO`: Name of the repository
+
 ### Branch Management
 
 1. **Branch Verification**: Before starting any development work, verify the current Git branch

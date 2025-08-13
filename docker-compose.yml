@@ -5,18 +5,22 @@ services:
     build:
       context: ./gemini-cli
       dockerfile: Dockerfile
-    volumes:
-      - ./gemini-cli:/app
-      - ./gemini-cli/GEMINI.md:/app/GEMINI.md
-      # - ./plan.md:/app/plan.md
-      - ./gemini-cli/settings.json:/app/.gemini/settings.json
     environment:
       # Load the API key from a .env file in the same directory
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # GitHub environment variables for repository operations
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=${GITHUB_REPO}
       # Set GEMINI_SYSTEM_MD to load your custom GEMINI.md as the primary system instruction
       # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
       # The value should be the path *inside the container*.
       - GEMINI_SYSTEM_MD=/app/GEMINI.md
+    volumes:
+      # Mount the GEMINI.md file into the container at the expected path
+      - ./gemini-cli/GEMINI.md:/app/GEMINI.md
+      # Mount any additional settings or configuration files if needed
+      # - ./gemini-cli/settings.json:/app/settings.json
     restart: unless-stopped
     command: ["gemini", "--model", "gemini-2.5-flash-lite","-y", "-p", "get jira task DP-4 info and do it"]
     depends_on:
