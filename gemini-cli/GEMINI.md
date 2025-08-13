@@ -193,6 +193,16 @@ After completing a task, automatically generate a report including:
 
 This report should be programmatically added to the pull request description and automatically linked in the Jira ticket without requiring user intervention.
 
+## Git Workflow Guidelines
+
+### Branch Management
+
+1. **Branch Verification**: Before starting any development work, verify the current Git branch
+2. **Avoid Main Branch**: Never commit code directly to the main branch
+3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `PROJ-123`)
+4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID
+5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
+
 ## Jira Workflow Guidelines
 
 ### Status Transitions
