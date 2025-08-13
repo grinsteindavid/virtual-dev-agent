@@ -10,21 +10,41 @@ This document provides guidelines for the Gemini CLI when working with the Virtu
 4. **Documentation**: Document all code thoroughly
 5. **Non-Interactive Execution**: All processes must run without requiring user input
 
-## Project Setup
+# Development Workflow: Step-by-Step
 
-Always begin by checking that project dependencies are installed:
+## 1. Initial Setup
 
-```bash
-npm install
-```
+### Repository Setup
 
-Only consider a task complete when all tests pass:
+1. **Fetch GitHub Project**: Always start by fetching the GitHub project using environment variables:
+   ```bash
+   git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
+   ```
+   - `GITHUB_TOKEN`: Authentication token for GitHub access
+   - `GITHUB_OWNER`: Owner of the repository (username or organization)
+   - `GITHUB_REPO`: Name of the repository
 
-```bash
-npm test -- --watchAll=false
-```
+### Branch Management
 
-## Testing Requirements
+1. **Branch Verification**: Before starting any development work, verify the current Git branch
+2. **Avoid Main Branch**: Never commit code directly to the main branch
+3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `PROJ-123`)
+4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID
+5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
+
+### Project Dependencies
+
+1. Install dependencies automatically:
+   ```bash
+   npm install --no-audit --no-fund --silent
+   ```
+
+## 2. Task Analysis
+
+1. **Analyze Requirements**: Understand the Jira story requirements thoroughly
+2. **Plan Implementation**: Create a mental model of the implementation approach
+
+## 3. Test Creation
 
 ### Jest Test Files
 
@@ -62,61 +82,39 @@ describe('Component/Function Name', () => {
 });
 ```
 
-### Test Coverage
+### Test Coverage Goals
 
 - Aim for at least 80% code coverage
 - Test all public methods and functions
 - Test component rendering and interactions
 - Mock external dependencies
 
-## Logging Requirements
-
-### Log Levels
-
-Use appropriate log levels:
-
-- `error`: For errors that prevent normal operation
-- `warn`: For potential issues that don't stop execution
-- `info`: For significant events in normal operation
-- `debug`: For detailed debugging information
-
-### Logging Format
-
-Include relevant context in logs:
+### Test File Structure Example
 
 ```javascript
-// Example logging
-logger.info({
-  action: 'userLogin',
-  userId: user.id,
-  timestamp: new Date().toISOString(),
-  metadata: { browser, ip, location }
-}, 'User successfully logged in');
+// ComponentName.test.jsx
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import ComponentName from './ComponentName';
+
+describe('ComponentName', () => {
+  test('renders correctly with props', () => {
+    render(<ComponentName prop1="test" prop2={42} />);
+    expect(screen.getByText(/expected content/i)).toBeInTheDocument();
+  });
+  
+  // Additional tests
+});
 ```
 
-### Log Points
+## 4. Code Implementation
 
-Add logs at these critical points:
+### Implementation Process
 
-1. Function entry and exit
-2. Before and after API calls
-3. State changes
-4. Error conditions
-5. User interactions (for UI components)
+1. **Write Minimal Code**: Write the minimum code needed to pass tests
+2. **Follow Component Structure**: Use the standard structure for components
 
-## Code Implementation Process
-
-1. **Analyze Requirements**: Understand the Jira story requirements
-2. **Write Tests**: Create Jest test files based on requirements
-3. **Implement Code**: Write the minimum code needed to pass tests
-4. **Add Logging**: Implement comprehensive logging
-5. **Run Tests**: Execute Jest tests until all pass
-6. **Refactor**: Improve code quality while maintaining test coverage
-7. **Document**: Add JSDoc comments and update documentation
-
-## React Component Guidelines
-
-### Component Structure
+### React Component Structure Example
 
 ```javascript
 // ComponentName.jsx
@@ -153,84 +151,107 @@ ComponentName.defaultProps = {
 export default ComponentName;
 ```
 
-### Test File Structure
+## 5. Add Logging
+
+### Log Levels
+
+Use appropriate log levels:
+
+- `error`: For errors that prevent normal operation
+- `warn`: For potential issues that don't stop execution
+- `info`: For significant events in normal operation
+- `debug`: For detailed debugging information
+
+### Logging Format
+
+Include relevant context in logs:
 
 ```javascript
-// ComponentName.test.jsx
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import ComponentName from './ComponentName';
-
-describe('ComponentName', () => {
-  test('renders correctly with props', () => {
-    render(<ComponentName prop1="test" prop2={42} />);
-    expect(screen.getByText(/expected content/i)).toBeInTheDocument();
-  });
-  
-  // Additional tests
-});
+// Example logging
+logger.info({
+  action: 'userLogin',
+  userId: user.id,
+  timestamp: new Date().toISOString(),
+  metadata: { browser, ip, location }
+}, 'User successfully logged in');
 ```
 
-## Execution Guidelines
+### Log Points
 
-When executing tasks in the non-interactive Docker environment, the virtual developer should:
+Add logs at these critical points:
 
-1. Install dependencies automatically: `npm install --no-audit --no-fund --silent`
-2. Run tests in CI mode: `npm test -- --watchAll=false --ci --silent`
-3. Programmatically check test coverage
-4. Automatically analyze test failures and apply fixes
-5. Document all assumptions and decisions in code comments and logs
-6. Verify all tests pass before code submission without user confirmation
+1. Function entry and exit
+2. Before and after API calls
+3. State changes
+4. Error conditions
+5. User interactions (for UI components)
 
-## Reporting
+## 6. Testing and Refinement
 
-After completing a task, automatically generate a report including:
+### Run Tests
+
+Execute Jest tests in CI mode:
+```bash
+npm test -- --watchAll=false --ci --silent
+```
+
+### Analyze and Fix
+
+1. Programmatically check test coverage
+2. Automatically analyze test failures and apply fixes
+
+### Refactor
+
+1. Improve code quality while maintaining test coverage
+2. Ensure code follows best practices
+
+### Documentation
+
+1. Add JSDoc comments to all functions and classes
+2. Update any relevant documentation files
+
+## 7. Verification
+
+1. Verify all tests pass:
+   ```bash
+   npm test -- --watchAll=false
+   ```
+2. Document all assumptions and decisions in code comments and logs
+
+## 8. Reporting and Submission
+
+### Generate Report
+
+Automatically generate a report including:
 
 1. Test coverage statistics
 2. Passed/failed test counts
 3. Implementation notes
 4. Any known limitations or future improvements
 
-This report should be programmatically added to the pull request description and automatically linked in the Jira ticket without requiring user intervention.
+### Submit Changes
 
-## Git Workflow Guidelines
+1. Commit all changes to the task-specific branch
+2. Create a pull request with the generated report in the description
 
-### Repository Setup
+### Update Jira
 
-1. **Fetch GitHub Project**: Always start by fetching the GitHub project using environment variables:
-   ```bash
-   git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
-   ```
-   - `GITHUB_TOKEN`: Authentication token for GitHub access
-   - `GITHUB_OWNER`: Owner of the repository (username or organization)
-   - `GITHUB_REPO`: Name of the repository
-
-### Branch Management
-
-1. **Branch Verification**: Before starting any development work, verify the current Git branch
-2. **Avoid Main Branch**: Never commit code directly to the main branch
-3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `PROJ-123`)
-4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID
-5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
-
-## Jira Workflow Guidelines
-
-### Status Transitions
-
-1. **Restricted Status Changes**: The virtual developer can only change Jira ticket status from "In Progress" to "In Review"
-2. **Human-Only Status Changes**: All other status transitions (such as "To Do" to "In Progress" or "In Review" to "Done") must be performed by human team members
-3. **Status Validation**: Before attempting to update a ticket status, verify that the current status is "In Progress" and the target status is "In Review"
-4. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
-
-### Comments Usage
-
-1. **Limited Comment Posting**: Only add comments to Jira tickets after completing the assigned task
-2. **Test Verification**: Comments should only be posted after verifying that all Jest test files have passed successfully
-3. **Comment Content**: Comments should provide a concise summary of the work completed, including:
+1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
+2. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" only
+3. **Add Comments**: Post a concise summary of the completed work, including:
    - Key implementation details
    - Test coverage statistics
    - Any notable challenges or decisions made
+
+### Cross-Platform Communication
+
+1. **Send Identical Updates**: Ensure the same comment summary is sent to both Jira and Discord
+2. **Include References**: Add relevant ticket IDs and PR links in both communications
+
+## Important Restrictions
+
+1. **No User Interaction**: All processes must run without requiring user input
+2. **Limited Status Changes**: Only change Jira ticket status from "In Progress" to "In Review"
+3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
-5. **Cross-Platform Consistency**: The same comment summary must be sent to both Jira and Discord
-   - Ensure identical content is shared across both platforms
-   - Include relevant ticket IDs and PR links in both communications
+5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
