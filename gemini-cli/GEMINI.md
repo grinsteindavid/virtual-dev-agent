@@ -30,13 +30,12 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 ### Repository Setup
 
-1. **Fetch GitHub Project**: Always start by fetching the GitHub project using environment variables:
+1. **Fetch GitHub Project**: Always start by fetching the GitHub project using the repository URL:
    ```bash
-   git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
+   git clone ${GITHUB_REPOSITORY_URL} project_dir
+   cd project_dir
    ```
-   - `GITHUB_TOKEN`: Authentication token for GitHub access
-   - `GITHUB_OWNER`: Owner of the repository (username or organization)
-   - `GITHUB_REPO`: Name of the repository
+   - `GITHUB_REPOSITORY_URL`: Complete repository URL including authentication token
 
 ### Branch Management
 
