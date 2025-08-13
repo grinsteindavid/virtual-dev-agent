@@ -20,9 +20,9 @@ services:
       # Mount the GEMINI.md file into the container at the expected path
       - ./gemini-cli/GEMINI.md:/app/GEMINI.md
       # Mount any additional settings or configuration files if needed
-      # - ./gemini-cli/settings.json:/app/settings.json
+      - ./gemini-cli/settings.json:/app/settings.json
     restart: unless-stopped
-    command: ["gemini", "--model", "gemini-2.5-flash-lite","-y", "-p", "get jira task DP-4 info and do it"]
+    command: ["gemini", "--model", "gemini-2.5-flash-lite","-y", "-p", "use MCPs to get jira task ID 'DP-4' from project tasks, read the task description and do it"]
     depends_on:
       - discord-mcp
       - github-mcp
