@@ -1,24 +1,23 @@
-const JiraClient = require('jira-client');
-const winston = require('winston');
-const express = require('express');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const axios = require('axios');
+#!/usr/bin/env node
+
+import express from 'express';
+import { randomUUID } from 'crypto';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import JiraClient from 'jira-client';
+import { z } from 'zod';
+import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
 
-// Configure logger
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'jira-mcp.log' })
-  ]
+// Initialize Express app
+const app = express();
+app.use(express.json());
+
+// Health check route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'jira-mcp' });
 });
 
 // Initialize Jira client
@@ -32,325 +31,268 @@ const jira = new JiraClient({
   strictSSL: true
 });
 
-// Initialize API server
-const app = express();
-const PORT = process.env.PORT || 3003;
-
-app.use(express.json());
-app.use(cors());
-
-// SSE endpoint for gemini-cli MCP integration
-app.get('/sse', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
-  // Send initial connection message
-  res.write(`data: ${JSON.stringify({ type: 'connection', status: 'established' })}\n\n`);
-  
-  // Keep the connection alive with a ping every 30 seconds
-  const pingInterval = setInterval(() => {
-    res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: Date.now() })}\n\n`);
-  }, 30000);
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    clearInterval(pingInterval);
-    logger.info('SSE client disconnected');
-  });
-  
-  logger.info('SSE client connected');
+// Create MCP server instance
+const server = new McpServer({
+  name: 'jira-mcp',
+  version: '1.0.0'
 });
 
-// MCP tool schema endpoint
-app.get('/schema', (req, res) => {
-  const toolSchema = {
-    name: 'jira',
-    description: 'Jira integration for task management',
-    functions: [
-      {
-        name: 'get_task',
-        description: 'Get details of a Jira task',
-        parameters: {
-          type: 'object',
-          properties: {
-            taskId: {
-              type: 'string',
-              description: 'The Jira task ID'
-            }
-          },
-          required: ['taskId']
-        }
-      },
-      {
-        name: 'update_task_status',
-        description: 'Update the status of a Jira task',
-        parameters: {
-          type: 'object',
-          properties: {
-            taskId: {
-              type: 'string',
-              description: 'The Jira task ID'
-            },
-            statusId: {
-              type: 'string',
-              description: 'The status ID to set'
-            }
-          },
-          required: ['taskId', 'statusId']
-        }
-      },
-      {
-        name: 'add_comment',
-        description: 'Add a comment to a Jira task',
-        parameters: {
-          type: 'object',
-          properties: {
-            taskId: {
-              type: 'string',
-              description: 'The Jira task ID'
-            },
-            comment: {
-              type: 'string',
-              description: 'Comment text to add'
-            }
-          },
-          required: ['taskId', 'comment']
-        }
-      },
-      {
-        name: 'get_transitions',
-        description: 'Get available transitions for a Jira task',
-        parameters: {
-          type: 'object',
-          properties: {
-            taskId: {
-              type: 'string',
-              description: 'The Jira task ID'
-            }
-          },
-          required: ['taskId']
-        }
-      },
-      {
-        name: 'list_tasks',
-        description: 'Get a list of Jira tasks',
-        parameters: {
-          type: 'object',
-          properties: {
-            status: {
-              type: 'string',
-              description: 'Filter tasks by status (e.g., "To Do", "In Progress")',
-              default: 'To Do'
-            },
-            limit: {
-              type: 'integer',
-              description: 'Maximum number of tasks to return',
-              default: 10
-            }
-          },
-          required: []
-        }
-      }
-    ]
-  };
-  
-  res.json(toolSchema);
-});
+// Register Jira tools
 
-// API endpoint to get task details
-app.get('/api/task/:taskId', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    
-    if (!taskId) {
-      return res.status(400).json({ error: 'Missing taskId' });
+// Tool: Get task details
+server.registerTool(
+  'get_task',
+  {
+    title: 'Get Jira Task',
+    description: 'Get details of a Jira task by ID',
+    inputSchema: {
+      taskId: z.string().describe('The Jira task ID (e.g., DP-4)')
     }
-    
-    const issue = await jira.findIssue(taskId);
-    
-    logger.info('Task details retrieved', { taskId });
-    
-    return res.status(200).json({
-      id: issue.id,
-      key: issue.key,
-      summary: issue.fields.summary,
-      description: issue.fields.description,
-      status: issue.fields.status.name,
-      assignee: issue.fields.assignee ? issue.fields.assignee.displayName : null,
-      priority: issue.fields.priority ? issue.fields.priority.name : null,
-      created: issue.fields.created,
-      updated: issue.fields.updated
-    });
-  } catch (error) {
-    logger.error('Error retrieving task details', { error: error.message });
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to update task status
-app.post('/api/task/:taskId/status', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { statusId } = req.body;
-    
-    if (!taskId || !statusId) {
-      return res.status(400).json({ error: 'Missing taskId or statusId' });
-    }
-    
-    // Use the proper Jira API method for transitions
-    await jira.transitionIssue(taskId, {
-      transition: {
-        id: statusId
-      }
-    });
-    
-    logger.info('Task status updated', { taskId, statusId });
-    
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    logger.error('Error updating task status', { error: error.message });
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to add a comment to a task
-app.post('/api/task/:taskId/comment', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { comment } = req.body;
-    
-    if (!taskId || !comment) {
-      return res.status(400).json({ error: 'Missing taskId or comment' });
-    }
-    
-    // Create Atlassian Document Format (ADF) JSON structure for the comment
-    const commentBody = {
-      body: {
-        type: 'doc',
-        version: 1,
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: comment
-              }
-            ]
-          }
-        ]
-      }
-    };
-    
-    // Get authentication details from the jira client
-    const auth = Buffer.from(`${process.env.JIRA_USERNAME}:${process.env.JIRA_API_TOKEN}`).toString('base64');
-    
-    // Use axios to directly call the Jira API with the ADF format
-    const response = await axios.post(
-      `https://${jiraUrl}/rest/api/3/issue/${taskId}/comment`,
-      commentBody,
-      {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    logger.info('Comment added to task', { taskId });
-    
-    return res.status(200).json({ success: true, comment: response.data });
-  } catch (error) {
-    logger.error('Error adding comment to task', { error: error.message });
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to get available transitions for a task
-app.get('/api/task/:taskId/transitions', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    
-    if (!taskId) {
-      return res.status(400).json({ error: 'Missing taskId' });
-    }
-    
-    const transitions = await jira.listTransitions(taskId);
-    
-    logger.info('Task transitions retrieved', { taskId });
-    
-    return res.status(200).json({
-      transitions: transitions.transitions.map(transition => ({
-        id: transition.id,
-        name: transition.name,
-        to: transition.to.name
-      }))
-    });
-  } catch (error) {
-    logger.error('Error retrieving task transitions', { error: error.message });
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to get available tasks
-app.get('/api/tasks', async (req, res) => {
-  try {
-    const { status = 'To Do', limit = 10 } = req.query;
-    
-    const jql = `project = ${process.env.JIRA_PROJECT} AND status = "${status}" ORDER BY created DESC`;
-    
-    const issues = await jira.searchJira(jql, { maxResults: limit });
-    
-    logger.info('Tasks retrieved', { count: issues.issues.length });
-    
-    return res.status(200).json({
-      total: issues.total,
-      tasks: issues.issues.map(issue => ({
+  },
+  async ({ taskId }) => {
+    try {
+      const issue = await jira.findIssue(taskId);
+      
+      const taskDetails = {
         id: issue.id,
         key: issue.key,
         summary: issue.fields.summary,
+        description: issue.fields.description || 'No description',
         status: issue.fields.status.name,
-        assignee: issue.fields.assignee ? issue.fields.assignee.displayName : null,
-        priority: issue.fields.priority ? issue.fields.priority.name : null
-      }))
-    });
-  } catch (error) {
-    logger.error('Error retrieving tasks', { error: error.message });
-    return res.status(500).json({ error: error.message });
+        assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
+        priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
+        created: issue.fields.created,
+        updated: issue.fields.updated
+      };
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Task ${taskId}:\n` +
+                `Summary: ${taskDetails.summary}\n` +
+                `Status: ${taskDetails.status}\n` +
+                `Assignee: ${taskDetails.assignee}\n` +
+                `Priority: ${taskDetails.priority}\n` +
+                `Description: ${taskDetails.description}\n` +
+                `Created: ${taskDetails.created}\n` +
+                `Updated: ${taskDetails.updated}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error retrieving task ${taskId}: ${error.message}`
+        }]
+      };
+    }
   }
+);
+
+// Tool: List tasks
+server.registerTool(
+  'list_tasks',
+  {
+    title: 'List Jira Tasks',
+    description: 'Get a list of Jira tasks from the project',
+    inputSchema: {
+      status: z.string().optional().describe('Filter tasks by status (e.g., "To Do", "In Progress")'),
+      limit: z.number().optional().default(10).describe('Maximum number of tasks to return')
+    }
+  },
+  async ({ status = 'To Do', limit = 10 }) => {
+    try {
+      const jql = `project = ${process.env.JIRA_PROJECT} AND status = "${status}" ORDER BY created DESC`;
+      const issues = await jira.searchJira(jql, { maxResults: limit });
+      
+      const taskList = issues.issues.map(issue => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        status: issue.fields.status.name,
+        assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
+        priority: issue.fields.priority ? issue.fields.priority.name : 'No priority'
+      }));
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Found ${taskList.length} tasks with status "${status}":\n\n` +
+                taskList.map(task => 
+                  `${task.key}: ${task.summary}\n` +
+                  `  Status: ${task.status}\n` +
+                  `  Assignee: ${task.assignee}\n` +
+                  `  Priority: ${task.priority}\n`
+                ).join('\n')
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error listing tasks: ${error.message}`
+        }]
+      };
+    }
+  }
+);
+
+// Tool: Add comment to task
+server.registerTool(
+  'add_comment',
+  {
+    title: 'Add Comment to Jira Task',
+    description: 'Add a comment to a Jira task',
+    inputSchema: {
+      taskId: z.string().describe('The Jira task ID'),
+      comment: z.string().describe('Comment text to add')
+    }
+  },
+  async ({ taskId, comment }) => {
+    try {
+      // Create Atlassian Document Format (ADF) JSON structure for the comment
+      const commentBody = {
+        body: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: comment
+                }
+              ]
+            }
+          ]
+        }
+      };
+
+      // Use the Jira client's addComment method with ADF format
+      await jira.addComment(taskId, commentBody);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Successfully added comment to task ${taskId}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error adding comment to task ${taskId}: ${error.message}`
+        }]
+      };
+    }
+  }
+);
+
+// Tool: Get available transitions for a task
+server.registerTool(
+  'get_transitions',
+  {
+    title: 'Get Jira Task Transitions',
+    description: 'Get available status transitions for a Jira task',
+    inputSchema: {
+      taskId: z.string().describe('The Jira task ID')
+    }
+  },
+  async ({ taskId }) => {
+    try {
+      const transitions = await jira.listTransitions(taskId);
+      
+      const availableTransitions = transitions.transitions.map(transition => ({
+        id: transition.id,
+        name: transition.name,
+        to: transition.to.name
+      }));
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Available transitions for task ${taskId}:\n\n` +
+                availableTransitions.map(transition => 
+                  `ID: ${transition.id}\n` +
+                  `Name: ${transition.name}\n` +
+                  `To Status: ${transition.to}\n`
+                ).join('\n')
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error getting transitions for task ${taskId}: ${error.message}`
+        }]
+      };
+    }
+  }
+);
+
+// Store active sessions
+const sessions = new Map();
+
+// Session management functions
+const sessionIdGenerator = () => randomUUID();
+
+const onSessionInitialized = (sessionId, transport) => {
+  console.log(`New session initialized: ${sessionId}`);
+  sessions.set(sessionId, { transport, createdAt: new Date() });
+};
+
+// Create transport with automatic session ID management
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator,
+  onSessionInitialized
 });
 
-// Health check endpoint for Docker
-app.get('/health', (req, res) => {
+// Handle POST requests for JSON-RPC
+app.post('/mcp', async (req, res) => {
   try {
-    // For Docker health checks, always return healthy as long as the Express server is running
-    // This prevents container restarts due to missing Jira credentials or other environment variables
-    const credentialsStatus = {
-      jiraUrl: process.env.JIRA_URL ? 'configured' : 'not configured',
-      jiraUsername: process.env.JIRA_USERNAME ? 'configured' : 'not configured',
-      jiraApiToken: process.env.JIRA_API_TOKEN ? 'configured' : 'not configured'
-    };
-    
-    return res.status(200).json({ 
-      status: 'healthy', 
-      expressServer: 'running',
-      credentials: credentialsStatus
-    });
+    // The transport will automatically handle session IDs
+    await transport.handleRequest(req, res, req.body);
   } catch (error) {
-    logger.error('Health check failed', { error: error.message });
-    // Still return 200 to keep container running
-    return res.status(200).json({ 
-      status: 'healthy', 
-      expressServer: 'running',
-      error: error.message 
-    });
+    console.error('Error handling MCP request:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  logger.info(`Jira MCP server listening on port ${PORT}`);
-  logger.info(`SSE endpoint available at http://localhost:${PORT}/sse`);
+// Handle GET requests for SSE streaming
+app.get('/mcp', async (req, res) => {
+  try {
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error('Error handling SSE request:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Handle DELETE requests to end sessions
+app.delete('/mcp', async (req, res) => {
+  try {
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error('Error handling session deletion:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+// Start the HTTP MCP server
+async function main() {
+  const port = process.env.PORT || 3003;
+  
+  // Connect the transport to the MCP server
+  await server.connect(transport);
+  
+  // Start Express server
+  app.listen(port, () => {
+    console.log(`Jira MCP server listening on http://localhost:${port}`);
+  });
+}
+
+main().catch((error) => {
+  console.error('Failed to start Jira MCP server:', error);
+  process.exit(1);
 });

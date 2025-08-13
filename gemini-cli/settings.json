@@ -1,17 +1,17 @@
 {
   "mcpServers": {
-    "discord-mcp": {
-      "url": "http://discord-mcp:3001/sse",
+    "jira-mcp": {
+      "httpUrl": "http://jira-mcp:3003/mcp",
       "timeout": 30000,
       "trust": false
     },
     "github-mcp": {
-      "url": "http://github-mcp:3002/sse",
+      "httpUrl": "http://github-mcp:3002/mcp",
       "timeout": 30000,
       "trust": false
     },
-    "jira-mcp": {
-      "url": "http://jira-mcp:3003/sse",
+    "discord-mcp": {
+      "httpUrl": "http://discord-mcp:3001/mcp",
       "timeout": 30000,
       "trust": false
     }

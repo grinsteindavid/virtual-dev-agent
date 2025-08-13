@@ -17,4 +17,4 @@ COPY . .
 ENV NODE_ENV=production
 
 # Start the Discord MCP service
-CMD ["node", "index.js"]
+CMD ["node", "mcp-server.js"]

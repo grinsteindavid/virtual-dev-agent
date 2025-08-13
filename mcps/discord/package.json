@@ -1,19 +1,19 @@
 {
   "name": "discord-mcp",
   "version": "1.0.0",
-  "description": "Discord MCP for Virtual Developer Agent",
-  "main": "index.js",
+  "description": "Discord MCP Server for Virtual Developer Agent",
+  "main": "mcp-server.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
+    "start": "node mcp-server.js",
     "test": "jest"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.17.2",
     "axios": "^1.11.0",
-    "cors": "^2.8.5",
-    "discord.js": "^14.11.0",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "winston": "^3.8.2"
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "jest": "^29.5.0"

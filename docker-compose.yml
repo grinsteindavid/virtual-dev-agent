@@ -16,6 +16,7 @@ services:
       # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
       # The value should be the path *inside the container*.
       - GEMINI_SYSTEM_MD=/app/GEMINI.md
+      - DEBUG=gemini*
     volumes:
       # Mount the GEMINI.md file into the container at the expected path
       - ./gemini-cli/GEMINI.md:/app/GEMINI.md
@@ -42,6 +43,7 @@ services:
     ports:
       - "3001:3001"
     restart: unless-stopped
+    command: ["node", "mcp-server.js"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
@@ -64,6 +66,7 @@ services:
     ports:
       - "3002:3002"
     restart: unless-stopped
+    command: ["node", "mcp-server.js"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
       interval: 30s
@@ -87,6 +90,7 @@ services:
     ports:
       - "3003:3003"
     restart: unless-stopped
+    command: ["node", "index.js"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
       interval: 30s
