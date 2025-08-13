@@ -192,3 +192,25 @@ After completing a task, automatically generate a report including:
 4. Any known limitations or future improvements
 
 This report should be programmatically added to the pull request description and automatically linked in the Jira ticket without requiring user intervention.
+
+## Jira Workflow Guidelines
+
+### Status Transitions
+
+1. **Restricted Status Changes**: The virtual developer can only change Jira ticket status from "In Progress" to "In Review"
+2. **Human-Only Status Changes**: All other status transitions (such as "To Do" to "In Progress" or "In Review" to "Done") must be performed by human team members
+3. **Status Validation**: Before attempting to update a ticket status, verify that the current status is "In Progress" and the target status is "In Review"
+4. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
+
+### Comments Usage
+
+1. **Limited Comment Posting**: Only add comments to Jira tickets after completing the assigned task
+2. **Test Verification**: Comments should only be posted after verifying that all Jest test files have passed successfully
+3. **Comment Content**: Comments should provide a concise summary of the work completed, including:
+   - Key implementation details
+   - Test coverage statistics
+   - Any notable challenges or decisions made
+4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
+5. **Cross-Platform Consistency**: The same comment summary must be sent to both Jira and Discord
+   - Ensure identical content is shared across both platforms
+   - Include relevant ticket IDs and PR links in both communications
