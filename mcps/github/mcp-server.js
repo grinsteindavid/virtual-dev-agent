@@ -25,16 +25,17 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
-// Create MCP server instance
-const server = new McpServer({
-  name: 'github-mcp',
-  version: '1.0.0'
-});
+// Function to create a new MCP server instance
+function createMcpServer() {
+  const server = new McpServer({
+    name: 'github-mcp',
+    version: '1.0.0'
+  });
 
-// Register GitHub tools
+  // Register GitHub tools
 
-// Tool: Get repository information
-server.registerTool(
+  // Tool: Get repository information
+  server.tool(
   'get_repo_info',
   {
     title: 'Get Repository Info',
@@ -76,8 +77,8 @@ server.registerTool(
   }
 );
 
-// Tool: List issues
-server.registerTool(
+  // Tool: List issues
+  server.tool(
   'list_issues',
   {
     title: 'List GitHub Issues',
@@ -131,8 +132,8 @@ server.registerTool(
   }
 );
 
-// Tool: Create issue
-server.registerTool(
+  // Tool: Create issue
+  server.tool(
   'create_issue',
   {
     title: 'Create GitHub Issue',
@@ -171,8 +172,8 @@ server.registerTool(
   }
 );
 
-// Tool: Create pull request
-server.registerTool(
+  // Tool: Create pull request
+  server.tool(
   'create_pull_request',
   {
     title: 'Create GitHub Pull Request',
@@ -214,8 +215,10 @@ server.registerTool(
         }]
       };
     }
-  }
-);
+  });
+
+  return server;
+}
 
 // Store active sessions
 const sessions = new Map();
@@ -234,10 +237,12 @@ const transport = new StreamableHTTPServerTransport({
   onSessionInitialized
 });
 
+// Create and connect a single MCP server instance to the transport
+const server = createMcpServer();
+
 // Handle POST requests for JSON-RPC
 app.post('/mcp', async (req, res) => {
   try {
-    // The transport will automatically handle session IDs
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error('Error handling MCP request:', error);
@@ -258,6 +263,12 @@ app.get('/mcp', async (req, res) => {
 // Handle DELETE requests to end sessions
 app.delete('/mcp', async (req, res) => {
   try {
+    const sessionId = req.headers['mcp-session-id'];
+    if (sessionId && sessions.has(sessionId)) {
+      // Clean up the session
+      sessions.delete(sessionId);
+      console.log(`Session ${sessionId} ended and cleaned up`);
+    }
     await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling session deletion:', error);
@@ -265,12 +276,11 @@ app.delete('/mcp', async (req, res) => {
   }
 });
 
-
 // Start the HTTP MCP server
 async function main() {
   const port = process.env.PORT || 3002;
   
-  // Connect the transport to the MCP server
+  // Connect the server to the transport
   await server.connect(transport);
   
   // Start Express server

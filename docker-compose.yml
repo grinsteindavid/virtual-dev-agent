@@ -12,6 +12,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_OWNER=${GITHUB_OWNER}
       - GITHUB_REPO=${GITHUB_REPO}
+      - GITHUB_REPOSITORY_URL=${GITHUB_REPOSITORY_URL}
       # Set GEMINI_SYSTEM_MD to load your custom GEMINI.md as the primary system instruction
       # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
       # The value should be the path *inside the container*.
