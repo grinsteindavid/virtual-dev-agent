@@ -8,7 +8,7 @@ RUN apk --no-cache add curl
 
 # Install dependencies
 COPY package.json ./
-RUN npm install --no-optional && npm cache clean --force
+RUN npm install
 
 # Copy source code
 COPY . .
