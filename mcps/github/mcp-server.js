@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
-import express from 'express';
-import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import dotenv from 'dotenv';
@@ -11,31 +9,21 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config({ path: '../../.env' });
 
-// Initialize Express app
-const app = express();
-app.use(express.json());
-
-// Health check route
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'github-mcp' });
-});
-
 // Initialize GitHub client
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
-// Function to create a new MCP server instance
-function createMcpServer() {
-  const server = new McpServer({
-    name: 'github-mcp',
-    version: '1.0.0'
-  });
+// Create MCP server instance
+const server = new McpServer({
+  name: 'github-mcp',
+  version: '1.0.0'
+});
 
-  // Register GitHub tools
+// Register GitHub tools
 
-  // Tool: Get repository information
-  server.tool(
+// Tool: Get repository information
+server.tool(
   'get_repo_info',
   {
     title: 'Get Repository Info',
@@ -77,8 +65,8 @@ function createMcpServer() {
   }
 );
 
-  // Tool: List issues
-  server.tool(
+// Tool: List issues
+server.tool(
   'list_issues',
   {
     title: 'List GitHub Issues',
@@ -132,8 +120,8 @@ function createMcpServer() {
   }
 );
 
-  // Tool: Create issue
-  server.tool(
+// Tool: Create issue
+server.tool(
   'create_issue',
   {
     title: 'Create GitHub Issue',
@@ -172,8 +160,8 @@ function createMcpServer() {
   }
 );
 
-  // Tool: Create pull request
-  server.tool(
+// Tool: Create pull request
+server.tool(
   'create_pull_request',
   {
     title: 'Create GitHub Pull Request',
@@ -215,78 +203,18 @@ function createMcpServer() {
         }]
       };
     }
-  });
-
-  return server;
-}
-
-// Store active sessions
-const sessions = new Map();
-
-// Session management functions
-const sessionIdGenerator = () => randomUUID();
-
-const onSessionInitialized = (sessionId, transport) => {
-  console.log(`New session initialized: ${sessionId}`);
-  sessions.set(sessionId, { transport, createdAt: new Date() });
-};
-
-// Create transport with automatic session ID management
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator,
-  onSessionInitialized
-});
-
-// Create and connect a single MCP server instance to the transport
-const server = createMcpServer();
-
-// Handle POST requests for JSON-RPC
-app.post('/mcp', async (req, res) => {
-  try {
-    await transport.handleRequest(req, res, req.body);
-  } catch (error) {
-    console.error('Error handling MCP request:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
   }
-});
+);
 
-// Handle GET requests for SSE streaming
-app.get('/mcp', async (req, res) => {
-  try {
-    await transport.handleRequest(req, res);
-  } catch (error) {
-    console.error('Error handling SSE request:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// Handle DELETE requests to end sessions
-app.delete('/mcp', async (req, res) => {
-  try {
-    const sessionId = req.headers['mcp-session-id'];
-    if (sessionId && sessions.has(sessionId)) {
-      // Clean up the session
-      sessions.delete(sessionId);
-      console.log(`Session ${sessionId} ended and cleaned up`);
-    }
-    await transport.handleRequest(req, res);
-  } catch (error) {
-    console.error('Error handling session deletion:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// Start the HTTP MCP server
+// Start the STDIO MCP server
 async function main() {
-  const port = process.env.PORT || 3002;
+  // Create STDIO transport
+  const transport = new StdioServerTransport();
   
   // Connect the server to the transport
   await server.connect(transport);
   
-  // Start Express server
-  app.listen(port, () => {
-    console.log(`GitHub MCP server listening on http://localhost:${port}`);
-  });
+  console.error('GitHub MCP server started with STDIO transport');
 }
 
 main().catch((error) => {

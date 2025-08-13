@@ -1,17 +1,20 @@
 {
   "mcpServers": {
     "jira-mcp": {
-      "httpUrl": "http://jira-mcp:3003/mcp",
+      "command": "node",
+      "args": ["/app/mcps/jira/index.js"],
       "timeout": 30000,
       "trust": false
     },
     "github-mcp": {
-      "httpUrl": "http://github-mcp:3002/mcp",
+      "command": "node",
+      "args": ["/app/mcps/github/mcp-server.js"],
       "timeout": 30000,
       "trust": false
     },
     "discord-mcp": {
-      "httpUrl": "http://discord-mcp:3001/mcp",
+      "command": "node",
+      "args": ["/app/mcps/discord/mcp-server.js"],
       "timeout": 30000,
       "trust": false
     }
