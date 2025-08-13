@@ -3,9 +3,10 @@ const winston = require('winston');
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const axios = require('axios');
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: '../../.env' });
 
 // Configure logger
 const logger = winston.createLogger({
@@ -21,9 +22,10 @@ const logger = winston.createLogger({
 });
 
 // Initialize Jira client
+const jiraUrl = process.env.JIRA_URL ? process.env.JIRA_URL.replace(/^https?:\/\//, '') : '';
 const jira = new JiraClient({
   protocol: 'https',
-  host: process.env.JIRA_URL,
+  host: jiraUrl,
   username: process.env.JIRA_USERNAME,
   password: process.env.JIRA_API_TOKEN,
   apiVersion: '3',
@@ -115,6 +117,40 @@ app.get('/schema', (req, res) => {
           },
           required: ['taskId', 'comment']
         }
+      },
+      {
+        name: 'get_transitions',
+        description: 'Get available transitions for a Jira task',
+        parameters: {
+          type: 'object',
+          properties: {
+            taskId: {
+              type: 'string',
+              description: 'The Jira task ID'
+            }
+          },
+          required: ['taskId']
+        }
+      },
+      {
+        name: 'list_tasks',
+        description: 'Get a list of Jira tasks',
+        parameters: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              description: 'Filter tasks by status (e.g., "To Do", "In Progress")',
+              default: 'To Do'
+            },
+            limit: {
+              type: 'integer',
+              description: 'Maximum number of tasks to return',
+              default: 10
+            }
+          },
+          required: []
+        }
       }
     ]
   };
@@ -162,7 +198,8 @@ app.post('/api/task/:taskId/status', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId or statusId' });
     }
     
-    await jira.updateIssue(taskId, {
+    // Use the proper Jira API method for transitions
+    await jira.transitionIssue(taskId, {
       transition: {
         id: statusId
       }
@@ -187,13 +224,72 @@ app.post('/api/task/:taskId/comment', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId or comment' });
     }
     
-    await jira.addComment(taskId, comment);
+    // Create Atlassian Document Format (ADF) JSON structure for the comment
+    const commentBody = {
+      body: {
+        type: 'doc',
+        version: 1,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: comment
+              }
+            ]
+          }
+        ]
+      }
+    };
+    
+    // Get authentication details from the jira client
+    const auth = Buffer.from(`${process.env.JIRA_USERNAME}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+    
+    // Use axios to directly call the Jira API with the ADF format
+    const response = await axios.post(
+      `https://${jiraUrl}/rest/api/3/issue/${taskId}/comment`,
+      commentBody,
+      {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     
     logger.info('Comment added to task', { taskId });
     
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, comment: response.data });
   } catch (error) {
     logger.error('Error adding comment to task', { error: error.message });
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get available transitions for a task
+app.get('/api/task/:taskId/transitions', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    if (!taskId) {
+      return res.status(400).json({ error: 'Missing taskId' });
+    }
+    
+    const transitions = await jira.listTransitions(taskId);
+    
+    logger.info('Task transitions retrieved', { taskId });
+    
+    return res.status(200).json({
+      transitions: transitions.transitions.map(transition => ({
+        id: transition.id,
+        name: transition.name,
+        to: transition.to.name
+      }))
+    });
+  } catch (error) {
+    logger.error('Error retrieving task transitions', { error: error.message });
     return res.status(500).json({ error: error.message });
   }
 });
