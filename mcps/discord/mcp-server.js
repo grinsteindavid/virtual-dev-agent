@@ -4,9 +4,8 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import axios from 'axios';
-import { z } from 'zod';
 import dotenv from 'dotenv';
+import { tools } from './toolHandlers.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -20,211 +19,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'discord-mcp' });
 });
 
-// Create MCP server instance
-const server = new McpServer({
-  name: 'discord-mcp',
-  version: '1.0.0'
-});
 
-// Register Discord tools
-
-// Tool: Send Discord webhook message
-server.registerTool(
-  'send_webhook_message',
-  {
-    title: 'Send Discord Webhook Message',
-    description: 'Send a message to Discord via webhook',
-    inputSchema: {
-      content: z.string().describe('Message content to send'),
-      username: z.string().optional().describe('Username to display (optional)'),
-      avatar_url: z.string().optional().describe('Avatar URL to display (optional)')
-    }
-  },
-  async ({ content, username, avatar_url }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const payload = {
-        content,
-        ...(username && { username }),
-        ...(avatar_url && { avatar_url })
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent message to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord message: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Send Discord embed message
-server.registerTool(
-  'send_embed_message',
-  {
-    title: 'Send Discord Embed Message',
-    description: 'Send an embed message to Discord via webhook',
-    inputSchema: {
-      title: z.string().describe('Embed title'),
-      description: z.string().describe('Embed description'),
-      color: z.number().optional().describe('Embed color (decimal)'),
-      url: z.string().optional().describe('Embed URL'),
-      username: z.string().optional().describe('Username to display (optional)')
-    }
-  },
-  async ({ title, description, color, url, username }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const embed = {
-        title,
-        description,
-        ...(color && { color }),
-        ...(url && { url }),
-        timestamp: new Date().toISOString()
-      };
-
-      const payload = {
-        embeds: [embed],
-        ...(username && { username })
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent embed message to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord embed: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Send notification message
-server.registerTool(
-  'send_notification',
-  {
-    title: 'Send Discord Notification',
-    description: 'Send a formatted notification message to Discord',
-    inputSchema: {
-      type: z.enum(['info', 'success', 'warning', 'error']).describe('Notification type'),
-      message: z.string().describe('Notification message'),
-      details: z.string().optional().describe('Additional details (optional)')
-    }
-  },
-  async ({ type, message, details }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const colors = {
-        info: 0x3498db,    // Blue
-        success: 0x2ecc71, // Green
-        warning: 0xf39c12, // Orange
-        error: 0xe74c3c    // Red
-      };
-
-      const icons = {
-        info: 'ℹ️',
-        success: '✅',
-        warning: '⚠️',
-        error: '❌'
-      };
-
-      const embed = {
-        title: `${icons[type]} ${type.charAt(0).toUpperCase() + type.slice(1)} Notification`,
-        description: message,
-        color: colors[type],
-        timestamp: new Date().toISOString(),
-        ...(details && {
-          fields: [{
-            name: 'Details',
-            value: details,
-            inline: false
-          }]
-        })
-      };
-
-      const payload = {
-        embeds: [embed],
-        username: 'Virtual Dev Agent'
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent ${type} notification to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord notification: ${error.message}`
-        }]
-      };
-    }
-  }
-);
 
 // Store active sessions
 const sessions = new Map();
@@ -232,9 +27,33 @@ const sessions = new Map();
 // Session management functions
 const sessionIdGenerator = () => randomUUID();
 
-const onSessionInitialized = (sessionId, transport) => {
+const onSessionInitialized = async (sessionId, transport) => {
   console.log(`New session initialized: ${sessionId}`);
-  sessions.set(sessionId, { transport, createdAt: new Date() });
+  
+  // Create a new MCP server instance for this session
+  const sessionServer = new McpServer({
+    name: 'discord-mcp',
+    version: '1.0.0'
+  });
+  
+  // Register all tools for this session's server
+  tools.forEach(tool => {
+    sessionServer.tool(
+      tool.name,
+      tool.config,
+      tool.handler
+    );
+  });
+  
+  // Connect this session's server to the transport
+  await sessionServer.connect(transport);
+  
+  // Store both transport and server in the session
+  sessions.set(sessionId, { 
+    transport, 
+    server: sessionServer,
+    createdAt: new Date() 
+  });
 };
 
 // Create transport with automatic session ID management
@@ -267,6 +86,15 @@ app.get('/mcp', async (req, res) => {
 // Handle DELETE requests to end sessions
 app.delete('/mcp', async (req, res) => {
   try {
+    const sessionId = req.headers['mcp-session-id'];
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId);
+      if (session.server) {
+        await session.server.close();
+      }
+      sessions.delete(sessionId);
+      console.log(`Session ${sessionId} closed and removed`);
+    }
     await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling session deletion:', error);
@@ -278,9 +106,6 @@ app.delete('/mcp', async (req, res) => {
 // Start the HTTP MCP server
 async function main() {
   const port = process.env.PORT || 3001;
-  
-  // Connect the transport to the MCP server
-  await server.connect(transport);
   
   // Start Express server
   app.listen(port, () => {

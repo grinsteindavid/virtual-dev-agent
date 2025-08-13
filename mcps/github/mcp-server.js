@@ -4,9 +4,8 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { Octokit } from '@octokit/rest';
-import { z } from 'zod';
 import dotenv from 'dotenv';
+import { tools } from './toolHandlers.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -20,202 +19,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', service: 'github-mcp' });
 });
 
-// Initialize GitHub client
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN
-});
 
-// Create MCP server instance
-const server = new McpServer({
-  name: 'github-mcp',
-  version: '1.0.0'
-});
-
-// Register GitHub tools
-
-// Tool: Get repository information
-server.registerTool(
-  'get_repo_info',
-  {
-    title: 'Get Repository Info',
-    description: 'Get information about a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name')
-    }
-  },
-  async ({ owner, repo }) => {
-    try {
-      const { data } = await octokit.rest.repos.get({
-        owner,
-        repo
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Repository: ${data.full_name}\n` +
-                `Description: ${data.description || 'No description'}\n` +
-                `Language: ${data.language || 'Not specified'}\n` +
-                `Stars: ${data.stargazers_count}\n` +
-                `Forks: ${data.forks_count}\n` +
-                `Open Issues: ${data.open_issues_count}\n` +
-                `Created: ${data.created_at}\n` +
-                `Updated: ${data.updated_at}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error getting repository info: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: List issues
-server.registerTool(
-  'list_issues',
-  {
-    title: 'List GitHub Issues',
-    description: 'List issues in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      state: z.string().optional().default('open').describe('Issue state (open, closed, all)'),
-      limit: z.number().optional().default(10).describe('Maximum number of issues to return')
-    }
-  },
-  async ({ owner, repo, state = 'open', limit = 10 }) => {
-    try {
-      const { data } = await octokit.rest.issues.listForRepo({
-        owner,
-        repo,
-        state,
-        per_page: limit
-      });
-      
-      const issues = data.map(issue => ({
-        number: issue.number,
-        title: issue.title,
-        state: issue.state,
-        author: issue.user.login,
-        created: issue.created_at,
-        url: issue.html_url
-      }));
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Found ${issues.length} issues in ${owner}/${repo}:\n\n` +
-                issues.map(issue => 
-                  `#${issue.number}: ${issue.title}\n` +
-                  `  State: ${issue.state}\n` +
-                  `  Author: ${issue.author}\n` +
-                  `  Created: ${issue.created}\n` +
-                  `  URL: ${issue.url}\n`
-                ).join('\n')
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error listing issues: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Create issue
-server.registerTool(
-  'create_issue',
-  {
-    title: 'Create GitHub Issue',
-    description: 'Create a new issue in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      title: z.string().describe('Issue title'),
-      body: z.string().optional().describe('Issue body/description')
-    }
-  },
-  async ({ owner, repo, title, body }) => {
-    try {
-      const { data } = await octokit.rest.issues.create({
-        owner,
-        repo,
-        title,
-        body
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully created issue #${data.number}: ${data.title}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating issue: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Create pull request
-server.registerTool(
-  'create_pull_request',
-  {
-    title: 'Create GitHub Pull Request',
-    description: 'Create a new pull request in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      title: z.string().describe('Pull request title'),
-      body: z.string().optional().describe('Pull request body/description'),
-      head: z.string().describe('Branch to merge from (source branch)'),
-      base: z.string().optional().default('main').describe('Branch to merge into (target branch, default: main)')
-    }
-  },
-  async ({ owner, repo, title, body, head, base = 'main' }) => {
-    try {
-      const { data } = await octokit.rest.pulls.create({
-        owner,
-        repo,
-        title,
-        body,
-        head,
-        base
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully created pull request #${data.number}: ${data.title}\n` +
-                `From: ${data.head.ref} → ${data.base.ref}\n` +
-                `State: ${data.state}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating pull request: ${error.message}`
-        }]
-      };
-    }
-  }
-);
 
 // Store active sessions
 const sessions = new Map();
@@ -223,9 +27,33 @@ const sessions = new Map();
 // Session management functions
 const sessionIdGenerator = () => randomUUID();
 
-const onSessionInitialized = (sessionId, transport) => {
+const onSessionInitialized = async (sessionId, transport) => {
   console.log(`New session initialized: ${sessionId}`);
-  sessions.set(sessionId, { transport, createdAt: new Date() });
+  
+  // Create a new MCP server instance for this session
+  const sessionServer = new McpServer({
+    name: 'github-mcp',
+    version: '1.0.0'
+  });
+  
+  // Register all tools for this session's server
+  tools.forEach(tool => {
+    sessionServer.tool(
+      tool.name,
+      tool.config,
+      tool.handler
+    );
+  });
+  
+  // Connect this session's server to the transport
+  await sessionServer.connect(transport);
+  
+  // Store both transport and server in the session
+  sessions.set(sessionId, { 
+    transport, 
+    server: sessionServer,
+    createdAt: new Date() 
+  });
 };
 
 // Create transport with automatic session ID management
@@ -258,6 +86,15 @@ app.get('/mcp', async (req, res) => {
 // Handle DELETE requests to end sessions
 app.delete('/mcp', async (req, res) => {
   try {
+    const sessionId = req.headers['mcp-session-id'];
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId);
+      if (session.server) {
+        await session.server.close();
+      }
+      sessions.delete(sessionId);
+      console.log(`Session ${sessionId} closed and removed`);
+    }
     await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling session deletion:', error);
@@ -265,13 +102,9 @@ app.delete('/mcp', async (req, res) => {
   }
 });
 
-
 // Start the HTTP MCP server
 async function main() {
   const port = process.env.PORT || 3002;
-  
-  // Connect the transport to the MCP server
-  await server.connect(transport);
   
   // Start Express server
   app.listen(port, () => {
