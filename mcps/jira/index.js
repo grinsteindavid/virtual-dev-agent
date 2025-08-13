@@ -57,7 +57,8 @@ server.registerTool(
         id: issue.id,
         key: issue.key,
         summary: issue.fields.summary,
-        description: issue.fields.description || 'No description',
+        description: JSON.stringify(issue.fields.description) || 'No description',
+        attachments: JSON.stringify(issue.fields.attachment) || 'No attachments',
         status: issue.fields.status.name,
         assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
         priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
@@ -74,6 +75,7 @@ server.registerTool(
                 `Assignee: ${taskDetails.assignee}\n` +
                 `Priority: ${taskDetails.priority}\n` +
                 `Description: ${taskDetails.description}\n` +
+                `Attachments: ${taskDetails.attachments}\n` +
                 `Created: ${taskDetails.created}\n` +
                 `Updated: ${taskDetails.updated}`
         }]
