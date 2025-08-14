@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import express from 'express';
-import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import JiraClient from 'jira-client';
@@ -14,6 +13,35 @@ dotenv.config({ path: '../../.env' });
 // Initialize Express app
 const app = express();
 app.use(express.json());
+// Logging middleware to trace MCP client-server interactions
+app.use((req, res, next) => {
+  const start = Date.now();
+  const sessionId = req.header('mcp-session-id') || '(none)';
+  const method = req.method;
+  const path = req.path;
+  
+  // Log request with headers
+  try {
+    if (path === '/mcp') {
+      const headers = JSON.stringify(req.headers);
+      if (method === 'POST') {
+        console.log(`[MCP] -> ${method} ${path} sid=${sessionId} headers=${headers} body=${JSON.stringify(req.body)}`);
+      } else {
+        console.log(`[MCP] -> ${method} ${path} sid=${sessionId} headers=${headers}`);
+      }
+    }
+  } catch {
+    console.log(`[MCP] -> ${method} ${path} sid=${sessionId} (logging failed)`);
+  }
+  
+  // Log response with status and duration
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const responseHeaders = JSON.stringify(res.getHeaders());
+    console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} headers=${responseHeaders} ${duration}ms`);
+  });
+  next();
+});
 
 // Health check route
 app.get('/health', (req, res) => {
@@ -232,21 +260,9 @@ server.registerTool(
   }
 );
 
-// Store active sessions
-const sessions = new Map();
-
-// Session management functions
-const sessionIdGenerator = () => randomUUID();
-
-const onSessionInitialized = (sessionId, transport) => {
-  console.log(`New session initialized: ${sessionId}`);
-  sessions.set(sessionId, { transport, createdAt: new Date() });
-};
-
-// Create transport with automatic session ID management
+// Create transport (client provides mcp-session-id; no server-side generation)
 const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator,
-  onSessionInitialized
+  sessionIdGenerator: undefined,
 });
 
 // Handle POST requests for JSON-RPC
