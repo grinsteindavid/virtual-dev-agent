@@ -51,7 +51,14 @@ app.use((req, res, next) => {
 
 // Health check route
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'github-mcp' });
+  const requiredEnv = ['GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO'];
+  const missingEnv = requiredEnv.filter((k) => !process.env[k]);
+  const ok = missingEnv.length === 0;
+  res.status(ok ? 200 : 500).json({
+    status: ok ? 'ok' : 'error',
+    service: 'github-mcp',
+    missingEnv
+  });
 });
 
 // Initialize GitHub client

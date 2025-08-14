@@ -50,7 +50,14 @@ app.use((req, res, next) => {
 
 // Health check route
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'jira-mcp' });
+  const requiredEnv = ['JIRA_URL', 'JIRA_USERNAME', 'JIRA_API_TOKEN', 'JIRA_PROJECT'];
+  const missingEnv = requiredEnv.filter((k) => !process.env[k]);
+  const ok = missingEnv.length === 0;
+  res.status(ok ? 200 : 500).json({
+    status: ok ? 'ok' : 'error',
+    service: 'jira-mcp',
+    missingEnv
+  });
 });
 
 // Initialize Jira client

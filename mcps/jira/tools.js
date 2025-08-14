@@ -26,7 +26,7 @@ export function registerJiraTools(server, jira) {
       }
     },
     async ({ taskId }) => {
-      logger.info('get_task: invoked', { taskId });
+      logger.info(`get_task: invoked taskId=${taskId}`, { taskId });
       try {
         const issue = await jira.findIssue(taskId);
 
@@ -43,7 +43,7 @@ export function registerJiraTools(server, jira) {
           updated: issue.fields.updated
         };
 
-        logger.info('get_task: success', { key: taskDetails.key, status: taskDetails.status });
+        logger.info(`get_task: success taskId=${taskId}`, { key: taskDetails.key, status: taskDetails.status });
         return {
           content: [{
             type: 'text',
@@ -59,7 +59,7 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error('get_task: error', { message: error.message, stack: error.stack, taskId });
+        logger.error(`get_task: error taskId=${taskId}`, { message: error.message, stack: error.stack });
         return {
           content: [{
             type: 'text',
@@ -82,7 +82,7 @@ export function registerJiraTools(server, jira) {
       }
     },
     async ({ status = 'To Do', limit = 10 }) => {
-      logger.info('list_tasks: invoked', { status, limit });
+      logger.info(`list_tasks: invoked status=${status} limit=${limit}`);
       try {
         const jql = `project = ${process.env.JIRA_PROJECT} AND status = "${status}" ORDER BY created DESC`;
         const issues = await jira.searchJira(jql, { maxResults: limit });
@@ -95,7 +95,7 @@ export function registerJiraTools(server, jira) {
           priority: issue.fields.priority ? issue.fields.priority.name : 'No priority'
         }));
 
-        logger.info('list_tasks: success', { count: taskList.length, status });
+        logger.info(`list_tasks: success count=${taskList.length} status=${status}`);
         return {
           content: [{
             type: 'text',
@@ -109,7 +109,7 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error('list_tasks: error', { message: error.message, stack: error.stack, status });
+        logger.error(`list_tasks: error status=${status}`, { message: error.message, stack: error.stack });
         return {
           content: [{
             type: 'text',
@@ -132,7 +132,7 @@ export function registerJiraTools(server, jira) {
       }
     },
     async ({ taskId, comment }) => {
-      logger.info('add_comment: invoked', { taskId, commentLength: comment?.length ?? 0 });
+      logger.info(`add_comment: invoked taskId=${taskId} commentLength=${comment?.length ?? 0}`);
       try {
         // Create Atlassian Document Format (ADF) JSON structure for the comment
         const commentBody = {
@@ -156,7 +156,7 @@ export function registerJiraTools(server, jira) {
         // Use the Jira client's addComment method with ADF format
         await jira.addComment(taskId, commentBody);
 
-        logger.info('add_comment: success', { taskId });
+        logger.info(`add_comment: success taskId=${taskId}`);
         return {
           content: [{
             type: 'text',
@@ -164,7 +164,7 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error('add_comment: error', { message: error.message, stack: error.stack, taskId });
+        logger.error(`add_comment: error taskId=${taskId}`, { message: error.message, stack: error.stack });
         return {
           content: [{
             type: 'text',
@@ -186,7 +186,7 @@ export function registerJiraTools(server, jira) {
       }
     },
     async ({ taskId }) => {
-      logger.info('get_transitions: invoked', { taskId });
+      logger.info(`get_transitions: invoked taskId=${taskId}`);
       try {
         const transitions = await jira.listTransitions(taskId);
 
@@ -196,7 +196,7 @@ export function registerJiraTools(server, jira) {
           to: transition.to.name
         }));
 
-        logger.info('get_transitions: success', { count: availableTransitions.length, taskId });
+        logger.info(`get_transitions: success count=${availableTransitions.length} taskId=${taskId}`);
         return {
           content: [{
             type: 'text',
@@ -209,7 +209,7 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error('get_transitions: error', { message: error.message, stack: error.stack, taskId });
+        logger.error(`get_transitions: error taskId=${taskId}`, { message: error.message, stack: error.stack });
         return {
           content: [{
             type: 'text',

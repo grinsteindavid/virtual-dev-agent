@@ -49,7 +49,14 @@ app.use((req, res, next) => {
 
 // Health check route
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'discord-mcp' });
+  const requiredEnv = ['DISCORD_WEBHOOK_URL'];
+  const missingEnv = requiredEnv.filter((k) => !process.env[k]);
+  const ok = missingEnv.length === 0;
+  res.status(ok ? 200 : 500).json({
+    status: ok ? 'ok' : 'error',
+    service: 'discord-mcp',
+    missingEnv
+  });
 });
 
 // Create MCP server instance
