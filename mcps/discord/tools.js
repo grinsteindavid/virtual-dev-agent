@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { z } from 'zod';
 import winston from 'winston';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -15,9 +16,13 @@ const logger = winston.createLogger({
   ]
 });
 
+/**
+ * Register Discord tools with the MCP server
+ * @param {McpServer} server - The MCP server instance
+ */
 export function registerDiscordTools(server) {
   // Tool: Send Discord webhook message
-  server.tool(
+  server.registerTool(
     'send_webhook_message',
     {
       title: 'Send Discord Webhook Message',
@@ -79,7 +84,7 @@ export function registerDiscordTools(server) {
   );
 
   // Tool: Send Discord embed message
-  server.tool(
+  server.registerTool(
     'send_embed_message',
     {
       title: 'Send Discord Embed Message',
@@ -150,7 +155,7 @@ export function registerDiscordTools(server) {
   );
 
   // Tool: Send notification message
-  server.tool(
+  server.registerTool(
     'send_notification',
     {
       title: 'Send Discord Notification',

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import winston from 'winston';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import JiraClient from 'jira-client';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -14,9 +16,14 @@ const logger = winston.createLogger({
   ]
 });
 
+/**
+ * Register Jira tools with the MCP server
+ * @param {McpServer} server - The MCP server instance
+ * @param {JiraClient} jira - Initialized Jira client
+ */
 export function registerJiraTools(server, jira) {
   // Tool: Get task details
-  server.tool(
+  server.registerTool(
     'get_task',
     {
       title: 'Get Jira Task',
@@ -71,7 +78,7 @@ export function registerJiraTools(server, jira) {
   );
 
   // Tool: List tasks
-  server.tool(
+  server.registerTool(
     'list_tasks',
     {
       title: 'List Jira Tasks',
@@ -121,7 +128,7 @@ export function registerJiraTools(server, jira) {
   );
 
   // Tool: Add comment to task
-  server.tool(
+  server.registerTool(
     'add_comment',
     {
       title: 'Add Comment to Jira Task',
@@ -176,7 +183,7 @@ export function registerJiraTools(server, jira) {
   );
 
   // Tool: Get available transitions for a task
-  server.tool(
+  server.registerTool(
     'get_transitions',
     {
       title: 'Get Jira Task Transitions',

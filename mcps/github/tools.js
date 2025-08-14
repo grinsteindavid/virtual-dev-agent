@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import winston from 'winston';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Octokit } from '@octokit/rest';
 
 // Configure logger
 const logger = winston.createLogger({
@@ -14,9 +16,14 @@ const logger = winston.createLogger({
   ]
 });
 
+/**
+ * Register GitHub tools with the MCP server
+ * @param {McpServer} server - The MCP server instance
+ * @param {Octokit} octokit - Initialized Octokit client
+ */
 export function registerGithubTools(server, octokit) {
   // Tool: Get repository information
-  server.tool(
+  server.registerTool(
     'get_repo_info',
     {
       title: 'Get Repository Info',
@@ -61,7 +68,7 @@ export function registerGithubTools(server, octokit) {
   );
 
   // Tool: List issues
-  server.tool(
+  server.registerTool(
     'list_issues',
     {
       title: 'List GitHub Issues',
@@ -118,7 +125,7 @@ export function registerGithubTools(server, octokit) {
   );
 
   // Tool: Create issue
-  server.tool(
+  server.registerTool(
     'create_issue',
     {
       title: 'Create GitHub Issue',
@@ -160,7 +167,7 @@ export function registerGithubTools(server, octokit) {
   );
 
   // Tool: Create pull request
-  server.tool(
+  server.registerTool(
     'create_pull_request',
     {
       title: 'Create GitHub Pull Request',

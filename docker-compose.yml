@@ -25,7 +25,7 @@ services:
       - ./gemini-cli/plan.md:/app/plan.md
       # Mount any additional settings or configuration files if needed
       - ./gemini-cli/settings.json:/app/.gemini/settings.json
-    restart: unless-stopped
+    restart: 'no'
     command: ["gemini", "--model", "gemini-2.5-flash","-y", "-p", "@/app/plan.md"]
     depends_on:
       - discord-mcp
