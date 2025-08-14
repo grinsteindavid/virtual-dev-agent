@@ -279,5 +279,6 @@ Automatically generate a report including:
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
 5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
-6. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
-7. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
+6. **Work Within project_dir**: After cloning, all operations must occur strictly inside `project_dir` which is inside `/app` folder which is also the current directory. Treat it as the project root for the entire workflow.
+7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
+8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
