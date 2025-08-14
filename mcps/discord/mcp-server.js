@@ -3,9 +3,8 @@
 import express from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import axios from 'axios';
-import { z } from 'zod';
 import dotenv from 'dotenv';
+import { registerDiscordTools } from './tools.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -37,8 +36,13 @@ app.use((req, res, next) => {
   // Log response with status and duration
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const responseHeaders = JSON.stringify(res.getHeaders());
-    console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} headers=${responseHeaders} ${duration}ms`);
+    try {
+      const responseHeaders = JSON.stringify(res.getHeaders());
+      const responseBody = res.body ? JSON.stringify(res.body) : '';
+      console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} headers=${responseHeaders} ${duration}ms body=${responseBody}`);
+    } catch (error) {
+      console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} ${duration}ms (logging failed)`);
+    }
   });
   next();
 });
@@ -55,204 +59,7 @@ const server = new McpServer({
 });
 
 // Register Discord tools
-
-// Tool: Send Discord webhook message
-server.registerTool(
-  'send_webhook_message',
-  {
-    title: 'Send Discord Webhook Message',
-    description: 'Send a message to Discord via webhook',
-    inputSchema: {
-      content: z.string().describe('Message content to send'),
-      username: z.string().optional().describe('Username to display (optional)'),
-      avatar_url: z.string().optional().describe('Avatar URL to display (optional)')
-    }
-  },
-  async ({ content, username, avatar_url }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const payload = {
-        content,
-        ...(username && { username }),
-        ...(avatar_url && { avatar_url })
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent message to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord message: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Send Discord embed message
-server.registerTool(
-  'send_embed_message',
-  {
-    title: 'Send Discord Embed Message',
-    description: 'Send an embed message to Discord via webhook',
-    inputSchema: {
-      title: z.string().describe('Embed title'),
-      description: z.string().describe('Embed description'),
-      color: z.number().optional().describe('Embed color (decimal)'),
-      url: z.string().optional().describe('Embed URL'),
-      username: z.string().optional().describe('Username to display (optional)')
-    }
-  },
-  async ({ title, description, color, url, username }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const embed = {
-        title,
-        description,
-        ...(color && { color }),
-        ...(url && { url }),
-        timestamp: new Date().toISOString()
-      };
-
-      const payload = {
-        embeds: [embed],
-        ...(username && { username })
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent embed message to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord embed: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-// Tool: Send notification message
-server.registerTool(
-  'send_notification',
-  {
-    title: 'Send Discord Notification',
-    description: 'Send a formatted notification message to Discord',
-    inputSchema: {
-      type: z.enum(['info', 'success', 'warning', 'error']).describe('Notification type'),
-      message: z.string().describe('Notification message'),
-      details: z.string().optional().describe('Additional details (optional)')
-    }
-  },
-  async ({ type, message, details }) => {
-    try {
-      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-      
-      if (!webhookUrl) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'Error: Discord webhook URL not configured'
-          }]
-        };
-      }
-
-      const colors = {
-        info: 0x3498db,    // Blue
-        success: 0x2ecc71, // Green
-        warning: 0xf39c12, // Orange
-        error: 0xe74c3c    // Red
-      };
-
-      const icons = {
-        info: 'ℹ️',
-        success: '✅',
-        warning: '⚠️',
-        error: '❌'
-      };
-
-      const embed = {
-        title: `${icons[type]} ${type.charAt(0).toUpperCase() + type.slice(1)} Notification`,
-        description: message,
-        color: colors[type],
-        timestamp: new Date().toISOString(),
-        ...(details && {
-          fields: [{
-            name: 'Details',
-            value: details,
-            inline: false
-          }]
-        })
-      };
-
-      const payload = {
-        embeds: [embed],
-        username: 'Virtual Dev Agent'
-      };
-
-      const response = await axios.post(webhookUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully sent ${type} notification to Discord. Status: ${response.status}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error sending Discord notification: ${error.message}`
-        }]
-      };
-    }
-  }
-);
+registerDiscordTools(server);
 
 // Create transport (client provides mcp-session-id; no server-side generation)
 const transport = new StreamableHTTPServerTransport({
