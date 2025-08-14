@@ -16,6 +16,7 @@ Future enhancements will include a server with webhooks to fully automate the de
 
 
 
+```bash
 developer_1    | I have completed the task for Jira ticket DP-4.
 developer_1    | 
 developer_1    | Implementation Details:
