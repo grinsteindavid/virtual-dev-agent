@@ -32,17 +32,18 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 1. **Fetch GitHub Project**: Always start by fetching the GitHub project using the repository URL:
    ```bash
-   git clone ${GITHUB_REPOSITORY_URL} project_dir
+   git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git project_dir
    cd project_dir
    ```
-   - `GITHUB_REPOSITORY_URL`: Complete repository URL including authentication token
+   - These are global environment variables already available in the Docker container
+   - No need to set these variables manually as they are pre-configured
 
 ### Branch Management
 
 1. **Branch Verification**: Before starting any development work, verify the current Git branch
 2. **Avoid Main Branch**: Never commit code directly to the main branch
 3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `PROJ-123`)
-4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID
+4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
 ### Project Dependencies
