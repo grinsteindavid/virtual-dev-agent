@@ -314,10 +314,6 @@ npm --prefix /app/project_dir test -- --watchAll=false
    npm --prefix /app/project_dir test -- --watchAll=false > /tmp/jest_logs.txt 2>&1
    test_exit_code=$?
    
-   # Store test logs for PR description
-   mkdir -p /app/project_dir/.reports
-   cp /tmp/jest_logs.txt /app/project_dir/.reports/jest_execution_logs.txt
-   
    # Exit with the original test exit code
    exit $test_exit_code
    ```
@@ -333,121 +329,14 @@ Automatically generate a report including:
 2. Passed/failed test counts
 3. Implementation notes
 4. Jest execution logs (from the verification step)
-5. Any known limitations or future improvements
 
-```bash
-# Generate report with Jest logs without command substitution or heredocs
-# Create report directory (will be excluded from git)
-mkdir -p /app/project_dir/.reports
-
-# Ensure .reports directory is excluded from git
-if [ ! -f "/app/project_dir/.gitignore" ] || ! grep -q "^.reports/$" "/app/project_dir/.gitignore"; then
-  echo ".reports/" >> /app/project_dir/.gitignore
-fi
-
-# Create header part of the report
-echo "# Implementation Report for the Jira task" > /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Test Results" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "<details>" >> /app/project_dir/.reports/pr_report.md
-echo "<summary>Jest Execution Logs</summary>" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo '```' >> /app/project_dir/.reports/pr_report.md
-
-# Append the Jest logs directly
-cat /app/project_dir/.reports/jest_execution_logs.txt >> /app/project_dir/.reports/pr_report.md
-
-# Add footer part of the report
-echo '```' >> /app/project_dir/.reports/pr_report.md
-echo "</details>" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Implementation Notes" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- Key changes implemented" >> /app/project_dir/.reports/pr_report.md
-echo "- Design decisions made" >> /app/project_dir/.reports/pr_report.md
-echo "- Components modified" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Test Coverage" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- Number of tests: [Count]" >> /app/project_dir/.reports/pr_report.md
-echo "- Coverage percentage: [Percentage]" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Known Limitations" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- List any known limitations or future improvements" >> /app/project_dir/.reports/pr_report.md
-```
 
 ### Submit Changes
 
 1. Commit all changes to the task-specific branch
 2. Push changes to task-specific branch
-3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description
-
-Non-interactive, absolute-path git commands (fail-fast):
-```bash
-set -eu
-PROJECT_ROOT="/app/project_dir"
-test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 50; }
-
-# Ensure we are on the Jira branch set earlier
-# Get current branch without command substitution
-git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD > /tmp/current_branch.txt
-read CURRENT_BRANCH < /tmp/current_branch.txt
-test -n "$CURRENT_BRANCH" || { echo "Unable to determine current branch"; exit 51; }
-
-# Make sure .reports is in .gitignore before committing
-if [ ! -f "$PROJECT_ROOT/.gitignore" ] || ! grep -q "^.reports/$" "$PROJECT_ROOT/.gitignore"; then
-  echo ".reports/" >> "$PROJECT_ROOT/.gitignore"
-fi
-
-# Stage all changes except .reports directory
-git -C "$PROJECT_ROOT" add -A
-git -C "$PROJECT_ROOT" reset -- "$PROJECT_ROOT/.reports/"
-git -C "$PROJECT_ROOT" commit -m "chore($CURRENT_BRANCH): implement task and tests"
-git -C "$PROJECT_ROOT" push -u origin "$CURRENT_BRANCH"
-```
-
-Create the PR using GitHub MCP tools with the current branch as source and `main` as target, including the generated report with Jest execution logs in the description:
-
-```bash
-# Use GitHub MCP tools to create PR with the report content that includes Jest logs
-# The PR description is read directly from the file to avoid command substitution
-
-# Example implementation using GitHub MCP tools:
-# 1. Read the PR description from the file
-# 2. Create the PR with the description
-
-# Store the PR number for later use with comments
-PR_NUMBER_FILE="/tmp/pr_number.txt"
-
-# Note: The actual implementation will depend on the specific GitHub MCP tool interface
-# This is a placeholder for the actual implementation
-```
-
-The GitHub MCP tool should be configured to read the PR description from `/app/project_dir/.reports/pr_report.md`, which contains the Jest execution logs in a collapsible section.
-
-After creating the PR, add a comment with the Jest test results summary:
-
-```bash
-# Extract Jest test summary from the logs and add as a PR comment
-# Create the comment content with the Jest summary in a code block
-echo "### Jest Test Results" > /tmp/jest_comment.md
-echo "" >> /tmp/jest_comment.md
-echo '```' >> /tmp/jest_comment.md
-
-# Extract the Jest summary from the logs file
-# Look for lines containing test results and append them to the comment
-grep -A 5 "Test Suites:" /app/project_dir/.reports/jest_execution_logs.txt > /tmp/jest_summary.txt
-
-# Append the extracted summary to the comment file
-cat /tmp/jest_summary.txt >> /tmp/jest_comment.md
-echo '```' >> /tmp/jest_comment.md
-
-# Use GitHub MCP tools to add the comment to the PR
-# The PR number should be available from the previous step
-# This is a placeholder for the actual implementation
-```
+3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report with Jest brief summary in the description.
+4. IF PR EXISTS, add a comment with the Jest test results summary.
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
@@ -480,6 +369,17 @@ echo '```' >> /tmp/jest_comment.md
     - Absolute path root is `/app/project_dir`. Do not use relative paths that escape this directory.
     - Always use `git -C /app/project_dir ...` and `npm --prefix /app/project_dir ...` for commands.
     - Never assume current working directory; never read or write outside `/app/project_dir`.
-    - If any operation attempts to access paths outside `/app/project_dir`, terminate with an error.
+    - If any operation attempts to access paths outside `/app/project_dir` or `/tmp`, terminate with an error.
 7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
 8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
+9. **Configuration File Restrictions**:
+    - The only configuration file that may be modified is `package.json`, and only to add new modules.
+    - Do not modify existing configuration values in any config files (including `package.json`, `.eslintrc`, `jest.config.js`, etc.).
+    - Changing existing configurations can disrupt the project's build, test, and deployment processes.
+    - If a task requires configuration changes beyond adding new dependencies, terminate with an error message explaining the limitation.
+10. **Path Error Resilience**:
+    - If encountering "File path must be within one of the workspace directories" errors, try alternative paths rather than terminating.
+    - First attempt with `/app/project_dir/` prefix, then try relative paths if absolute paths fail.
+    - Log path resolution attempts and continue with workflow steps even if a specific file operation fails.
+    - Only terminate the workflow if critical path operations fail after multiple retry attempts.
+    - For file operations, validate file existence before operations and provide meaningful error logs.
