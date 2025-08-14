@@ -22,13 +22,13 @@ export function registerJiraTools(server, jira) {
       title: 'Get Jira Task',
       description: 'Get details of a Jira task by ID',
       inputSchema: {
-        taskId: z.string().describe('The Jira task ID (e.g., DP-4)')
+        task_id: z.string().describe('The Jira task ID (e.g., DP-4)')
       }
     },
-    async ({ taskId }) => {
-      logger.info(`get_task: invoked taskId=${taskId}`, { taskId });
+    async ({ task_id }) => {
+      logger.info(`get_task: invoked task_id=${task_id}`, { task_id });
       try {
-        const issue = await jira.findIssue(taskId);
+        const issue = await jira.findIssue(task_id);
 
         const taskDetails = {
           id: issue.id,
@@ -43,11 +43,11 @@ export function registerJiraTools(server, jira) {
           updated: issue.fields.updated
         };
 
-        logger.info(`get_task: success taskId=${taskId}`, { key: taskDetails.key, status: taskDetails.status });
+        logger.info(`get_task: success task_id=${task_id}`, { key: taskDetails.key, status: taskDetails.status, task_id });
         return {
           content: [{
             type: 'text',
-            text: `Task ${taskId}:\n` +
+            text: `Task ${task_id}:\n` +
                   `Summary: ${taskDetails.summary}\n` +
                   `Status: ${taskDetails.status}\n` +
                   `Assignee: ${taskDetails.assignee}\n` +
@@ -59,11 +59,11 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error(`get_task: error taskId=${taskId}`, { message: error.message, stack: error.stack });
+        logger.error(`get_task: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id });
         return {
           content: [{
             type: 'text',
-            text: `Error retrieving task ${taskId}: ${error.message}`
+            text: `Error retrieving task ${task_id}: ${error.message}`
           }]
         };
       }
@@ -127,12 +127,12 @@ export function registerJiraTools(server, jira) {
       title: 'Add Comment to Jira Task',
       description: 'Add a comment to a Jira task',
       inputSchema: {
-        taskId: z.string().describe('The Jira task ID'),
+        task_id: z.string().describe('The Jira task ID'),
         comment: z.string().describe('Comment text to add')
       }
     },
-    async ({ taskId, comment }) => {
-      logger.info(`add_comment: invoked taskId=${taskId} commentLength=${comment?.length ?? 0}`);
+    async ({ task_id, comment }) => {
+      logger.info(`add_comment: invoked task_id=${task_id} commentLength=${comment?.length ?? 0}`);
       try {
         // Create Atlassian Document Format (ADF) JSON structure for the comment
         const commentBody = {
@@ -154,21 +154,21 @@ export function registerJiraTools(server, jira) {
         };
 
         // Use the Jira client's addComment method with ADF format
-        await jira.addComment(taskId, commentBody);
+        await jira.addComment(task_id, commentBody);
 
-        logger.info(`add_comment: success taskId=${taskId}`);
+        logger.info(`add_comment: success task_id=${task_id}`);
         return {
           content: [{
             type: 'text',
-            text: `Successfully added comment to task ${taskId}`
+            text: `Successfully added comment to task ${task_id}`
           }]
         };
       } catch (error) {
-        logger.error(`add_comment: error taskId=${taskId}`, { message: error.message, stack: error.stack });
+        logger.error(`add_comment: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id });
         return {
           content: [{
             type: 'text',
-            text: `Error adding comment to task ${taskId}: ${error.message}`
+            text: `Error adding comment to task ${task_id}: ${error.message}`
           }]
         };
       }
@@ -182,13 +182,13 @@ export function registerJiraTools(server, jira) {
       title: 'Get Jira Task Transitions',
       description: 'Get available status transitions for a Jira task',
       inputSchema: {
-        taskId: z.string().describe('The Jira task ID')
+        task_id: z.string().describe('The Jira task ID')
       }
     },
-    async ({ taskId }) => {
-      logger.info(`get_transitions: invoked taskId=${taskId}`);
+    async ({ task_id }) => {
+      logger.info(`get_transitions: invoked task_id=${task_id}`);
       try {
-        const transitions = await jira.listTransitions(taskId);
+        const transitions = await jira.listTransitions(task_id);
 
         const availableTransitions = transitions.transitions.map(transition => ({
           id: transition.id,
@@ -196,11 +196,11 @@ export function registerJiraTools(server, jira) {
           to: transition.to.name
         }));
 
-        logger.info(`get_transitions: success count=${availableTransitions.length} taskId=${taskId}`);
+        logger.info(`get_transitions: success count=${availableTransitions.length} task_id=${task_id}`);
         return {
           content: [{
             type: 'text',
-            text: `Available transitions for task ${taskId}:\n\n` +
+            text: `Available transitions for task ${task_id}:\n\n` +
                   availableTransitions.map(transition => 
                     `ID: ${transition.id}\n` +
                     `Name: ${transition.name}\n` +
@@ -209,11 +209,11 @@ export function registerJiraTools(server, jira) {
           }]
         };
       } catch (error) {
-        logger.error(`get_transitions: error taskId=${taskId}`, { message: error.message, stack: error.stack });
+        logger.error(`get_transitions: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id });
         return {
           content: [{
             type: 'text',
-            text: `Error getting transitions for task ${taskId}: ${error.message}`
+            text: `Error getting transitions for task ${task_id}: ${error.message}`
           }]
         };
       }
