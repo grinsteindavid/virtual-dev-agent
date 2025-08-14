@@ -37,3 +37,4 @@ developer_1    | Next Steps:
 developer_1    | - The Jira ticket DP-4 status should be updated to "In Review".
 developer_1    | 
 virtual-dev-agent_developer_1 exited with code 0
+```
