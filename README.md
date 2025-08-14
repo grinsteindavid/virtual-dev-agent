@@ -40,7 +40,6 @@ GEMINI_API_KEY=your_gemini_api_key
 GITHUB_TOKEN=ghp_xxx
 GITHUB_OWNER=your_github_user_or_org
 GITHUB_REPO=boilerplate-react-app
-GITHUB_REPOSITORY_URL=https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git
 
 # Jira
 JIRA_URL=https://your-domain.atlassian.net
