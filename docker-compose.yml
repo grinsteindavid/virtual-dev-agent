@@ -16,15 +16,15 @@ services:
       # Set GEMINI_SYSTEM_MD to load your custom GEMINI.md as the primary system instruction
       # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
       # The value should be the path *inside the container*.
-      - GEMINI_SYSTEM_MD=/app/GEMINI.md
+      - GEMINI_SYSTEM_MD=/home/node/GEMINI.md
       - DEBUG=gemini*
     volumes:
       # Mount the GEMINI.md file into the container at the expected path
-      - ./gemini-cli/GEMINI.md:/app/GEMINI.md
+      - ./gemini-cli/GEMINI.md:/home/node/GEMINI.md
       # Mount the plan.md file into the container
       - ./gemini-cli/plan.md:/app/plan.md
       # Mount any additional settings or configuration files if needed
-      - ./gemini-cli/settings.json:/app/.gemini/settings.json
+      - ./gemini-cli/settings.json:/home/node/.gemini/settings.json
     restart: 'no'
     command: ["gemini", "--model", "gemini-2.5-flash","-y", "-p", "@/app/plan.md"]
     depends_on:

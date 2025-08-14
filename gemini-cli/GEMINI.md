@@ -23,26 +23,39 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 5. **Non-Interactive Execution**: All processes must run without requiring user input
 6. **No Hallucinations**: If there is no clear path forward or insufficient information to complete a task, end the task rather than making assumptions or hallucinating solutions
 7. **Direct Action**: As an AI agent, execute tasks directly without asking questions; make informed decisions based on available information
+8. **Strict Workflow Adherence**: Follow the Development Workflow steps strictly in order; do not skip, reorder, or short-circuit any step.
 
 # Development Workflow: Step-by-Step
 
-## 1. Initial Setup
+## 1. Jira Task Intake and Analysis
+
+1. Read `/app/plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the ticket ID is missing or ambiguous, terminate with an error and do not proceed.
+2. Using Jira MCP tools, fetch the task details for the extracted ticket ID.
+3. Derive acceptance criteria and a concise task summary from the description to drive the upcoming test plan.
+4. Do NOT post comments to Jira or send Discord messages in this step. This step is read-only discovery.
+5. Proceed to repository setup only after successfully retrieving the task information.
+6. **Analyze Requirements**: Understand the Jira story requirements thoroughly
+7. **Plan Implementation**: Create a mental model of the implementation approach
+
+## 2. Initial Setup
 
 ### Repository Setup
 
-1. **Fetch GitHub Project**: Always start by fetching the GitHub project using the repository URL:
+1. Clone the GitHub repository using the pre-configured environment variables:
    ```bash
-   git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git project_dir
-   cd project_dir
+   git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git .
    ```
-   - These are global environment variables already available in the Docker container
-   - No need to set these variables manually as they are pre-configured
+
+#### Global Execution Context
+- All commands MUST be executed from inside `/app`. Treat `/app` as the working root for the entire run.
+- If at any point the working directory is not `/app`, abort with an error. Do not proceed outside this folder.
+- Do not create, move, or modify files outside `/app`.
 
 ### Branch Management
 
 1. **Branch Verification**: Before starting any development work, verify the current Git branch
 2. **Avoid Main Branch**: Never commit code directly to the main branch
-3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `PROJ-123`)
+3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `DP-5` or `DP-6` or `PROJ-7`)
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
@@ -52,11 +65,6 @@ As an AI agent, you are a senior software engineer and architect with extensive 
    ```bash
    npm install
    ```
-
-## 2. Task Analysis
-
-1. **Analyze Requirements**: Understand the Jira story requirements thoroughly
-2. **Plan Implementation**: Create a mental model of the implementation approach
 
 ## 3. Test Creation
 
@@ -249,18 +257,25 @@ Automatically generate a report including:
 2. Create a pull request with the generated report in the description
 
 ### Update Jira
-
-1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
-2. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" only
-3. **Add Comments**: Post a concise summary of the completed work, including:
-   - Key implementation details
-   - Test coverage statistics
-   - Any notable challenges or decisions made
+ Preconditions (ALL must be true before interacting with Jira or Discord):
+ - All acceptance criteria for the Jira ticket are met in code.
+ - All Jest tests pass (Step 7 Verification complete).
+ - Changes are committed to the task branch and a Pull Request has been created (Submit Changes step complete).
+ - Current working directory is `project_dir/`.
+ 
+  1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
+  2. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" only
+  3. **Add Comments**: Post a concise summary of the completed work, including:
+     - Key implementation details
+     - Test coverage statistics
+     - Any notable challenges or decisions made
 
 ### Cross-Platform Communication
-
-1. **Send Identical Updates**: Ensure the same comment summary is sent to both Jira and Discord
-2. **Include References**: Add relevant ticket IDs and PR links in both communications
+ Final report only: Send a single, consolidated report after completing the Jira task and passing all tests. Do not send interim or progress messages.
+ The following applies only after the Update Jira preconditions are satisfied:
+ 
+  1. **Send Identical Updates**: Ensure the same comment summary is sent to both Jira and Discord
+  2. **Include References**: Add relevant ticket IDs and PR links in both communications
 
 ## Important Restrictions
 
@@ -269,3 +284,6 @@ Automatically generate a report including:
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
 5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
+6. **Work Within project_dir**: After cloning, all operations must occur strictly inside `project_dir/`. Treat it as the project root for the entire workflow.
+7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
+8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.

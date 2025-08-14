@@ -1,1 +1,1 @@
-use MCPs to get jira task ID "DP-4" from project tasks, read the task description and do it
+- Jira Ticket ID: DP-4
