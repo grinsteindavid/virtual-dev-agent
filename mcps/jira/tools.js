@@ -141,26 +141,10 @@ export function registerJiraTools(server, jira) {
     async ({ task_id, comment }) => {
       logger.info(`add_comment: invoked task_id=${task_id} commentLength=${comment?.length ?? 0}`);
       try {
-        // Create Atlassian Document Format (ADF) JSON structure for the comment
-        const commentBody = {
-          body: {
-            type: 'doc',
-            version: 1,
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'text',
-                    text: comment
-                  }
-                ]
-              }
-            ]
-          }
-        };
+        // Using Jira API v2 format for comments (simple string)
+        const commentBody = comment;
 
-        // Use the Jira client's addComment method with ADF format
+        // Use the Jira client's addComment method with v2 API format
         await jira.addComment(task_id, commentBody);
 
         logger.info(`add_comment: success task_id=${task_id}`);
@@ -221,6 +205,61 @@ export function registerJiraTools(server, jira) {
           content: [{
             type: 'text',
             text: `Error getting transitions for task ${task_id}: ${error.message}`
+          }]
+        };
+      }
+    }
+  );
+
+  // Tool: Transition task status
+  server.tool(
+    'transition_task_status',
+    {
+      title: 'Transition Jira Task Status',
+      description: 'Change the status of a Jira task using transition ID',
+      inputSchema: {
+        task_id: z.string().describe('The Jira task ID'),
+        transition_id: z.string().describe('The transition ID to execute'),
+        comment: z.string().optional().describe('Optional comment to add with the transition')
+      }
+    },
+    async ({ task_id, transition_id, comment }) => {
+      logger.info(`transition_task_status: invoked task_id=${task_id} transition_id=${transition_id}`);
+      try {
+        // Prepare transition data
+        const transitionData = {
+          transition: {
+            id: transition_id
+          }
+        };
+        
+        // Add comment if provided
+        if (comment) {
+          transitionData.update = {
+            comment: comment
+          };
+        }
+
+        // Execute the transition
+        await jira.transitionIssue(task_id, transitionData);
+        
+        // Get updated task details to confirm the new status
+        const updatedIssue = await jira.findIssue(task_id);
+        const newStatus = updatedIssue.fields.status.name;
+        
+        logger.info(`transition_task_status: success task_id=${task_id} new_status=${newStatus}`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Successfully transitioned task ${task_id} to status: ${newStatus}`
+          }]
+        };
+      } catch (error) {
+        logger.error(`transition_task_status: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id, transition_id });
+        return {
+          content: [{
+            type: 'text',
+            text: `Error transitioning task ${task_id}: ${error.message}`
           }]
         };
       }

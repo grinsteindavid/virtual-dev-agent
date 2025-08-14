@@ -67,7 +67,7 @@ const jira = new JiraClient({
   host: jiraUrl,
   username: process.env.JIRA_USERNAME,
   password: process.env.JIRA_API_TOKEN,
-  apiVersion: '3',
+  apiVersion: '2',
   strictSSL: true
 });
 
