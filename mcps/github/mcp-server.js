@@ -5,8 +5,8 @@ import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Octokit } from '@octokit/rest';
-import { z } from 'zod';
 import dotenv from 'dotenv';
+import { registerGithubTools } from './tools.js';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -14,10 +14,51 @@ dotenv.config({ path: '../../.env' });
 // Initialize Express app
 const app = express();
 app.use(express.json());
+// Logging middleware to trace MCP client-server interactions
+app.use((req, res, next) => {
+  const start = Date.now();
+  const sessionId = req.header('mcp-session-id') || '(none)';
+  const method = req.method;
+  const path = req.path;
+  
+  // Log request with headers
+  try {
+    if (path === '/mcp') {
+      const headers = JSON.stringify(req.headers);
+      if (method === 'POST') {
+        console.log(`[MCP] -> ${method} ${path} sid=${sessionId} headers=${headers} body=${JSON.stringify(req.body)}`);
+      } else {
+        console.log(`[MCP] -> ${method} ${path} sid=${sessionId} headers=${headers}`);
+      }
+    }
+  } catch {
+    console.log(`[MCP] -> ${method} ${path} sid=${sessionId} (logging failed)`);
+  }
+  
+  // Log response with status and duration
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    try {
+      const responseHeaders = JSON.stringify(res.getHeaders());
+      const responseBody = res.body ? JSON.stringify(res.body) : '';
+      console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} headers=${responseHeaders} ${duration}ms body=${responseBody}`);
+    } catch (error) {
+      console.log(`[MCP] <- ${method} ${path} sid=${sessionId} status=${res.statusCode} ${duration}ms (logging failed)`);
+    }
+  });
+  next();
+});
 
 // Health check route
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'github-mcp' });
+  const requiredEnv = ['GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO'];
+  const missingEnv = requiredEnv.filter((k) => !process.env[k]);
+  const ok = missingEnv.length === 0;
+  res.status(ok ? 200 : 500).json({
+    status: ok ? 'ok' : 'error',
+    service: 'github-mcp',
+    missingEnv
+  });
 });
 
 // Initialize GitHub client
@@ -25,200 +66,14 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
-// Function to create a new MCP server instance
-function createMcpServer() {
-  const server = new McpServer({
-    name: 'github-mcp',
-    version: '1.0.0'
-  });
+// Create MCP server instance
+const server = new McpServer({
+  name: 'github-mcp',
+  version: '1.0.0'
+});
 
-  // Register GitHub tools
-
-  // Tool: Get repository information
-  server.tool(
-  'get_repo_info',
-  {
-    title: 'Get Repository Info',
-    description: 'Get information about a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name')
-    }
-  },
-  async ({ owner, repo }) => {
-    try {
-      const { data } = await octokit.rest.repos.get({
-        owner,
-        repo
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Repository: ${data.full_name}\n` +
-                `Description: ${data.description || 'No description'}\n` +
-                `Language: ${data.language || 'Not specified'}\n` +
-                `Stars: ${data.stargazers_count}\n` +
-                `Forks: ${data.forks_count}\n` +
-                `Open Issues: ${data.open_issues_count}\n` +
-                `Created: ${data.created_at}\n` +
-                `Updated: ${data.updated_at}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error getting repository info: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-  // Tool: List issues
-  server.tool(
-  'list_issues',
-  {
-    title: 'List GitHub Issues',
-    description: 'List issues in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      state: z.string().optional().default('open').describe('Issue state (open, closed, all)'),
-      limit: z.number().optional().default(10).describe('Maximum number of issues to return')
-    }
-  },
-  async ({ owner, repo, state = 'open', limit = 10 }) => {
-    try {
-      const { data } = await octokit.rest.issues.listForRepo({
-        owner,
-        repo,
-        state,
-        per_page: limit
-      });
-      
-      const issues = data.map(issue => ({
-        number: issue.number,
-        title: issue.title,
-        state: issue.state,
-        author: issue.user.login,
-        created: issue.created_at,
-        url: issue.html_url
-      }));
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Found ${issues.length} issues in ${owner}/${repo}:\n\n` +
-                issues.map(issue => 
-                  `#${issue.number}: ${issue.title}\n` +
-                  `  State: ${issue.state}\n` +
-                  `  Author: ${issue.author}\n` +
-                  `  Created: ${issue.created}\n` +
-                  `  URL: ${issue.url}\n`
-                ).join('\n')
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error listing issues: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-  // Tool: Create issue
-  server.tool(
-  'create_issue',
-  {
-    title: 'Create GitHub Issue',
-    description: 'Create a new issue in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      title: z.string().describe('Issue title'),
-      body: z.string().optional().describe('Issue body/description')
-    }
-  },
-  async ({ owner, repo, title, body }) => {
-    try {
-      const { data } = await octokit.rest.issues.create({
-        owner,
-        repo,
-        title,
-        body
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully created issue #${data.number}: ${data.title}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating issue: ${error.message}`
-        }]
-      };
-    }
-  }
-);
-
-  // Tool: Create pull request
-  server.tool(
-  'create_pull_request',
-  {
-    title: 'Create GitHub Pull Request',
-    description: 'Create a new pull request in a GitHub repository',
-    inputSchema: {
-      owner: z.string().describe('Repository owner/organization'),
-      repo: z.string().describe('Repository name'),
-      title: z.string().describe('Pull request title'),
-      body: z.string().optional().describe('Pull request body/description'),
-      head: z.string().describe('Branch to merge from (source branch)'),
-      base: z.string().optional().default('main').describe('Branch to merge into (target branch, default: main)')
-    }
-  },
-  async ({ owner, repo, title, body, head, base = 'main' }) => {
-    try {
-      const { data } = await octokit.rest.pulls.create({
-        owner,
-        repo,
-        title,
-        body,
-        head,
-        base
-      });
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Successfully created pull request #${data.number}: ${data.title}\n` +
-                `From: ${data.head.ref} → ${data.base.ref}\n` +
-                `State: ${data.state}\n` +
-                `URL: ${data.html_url}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating pull request: ${error.message}`
-        }]
-      };
-    }
-  });
-
-  return server;
-}
+// Register GitHub tools
+registerGithubTools(server, octokit);
 
 // Store active sessions
 const sessions = new Map();
@@ -237,12 +92,10 @@ const transport = new StreamableHTTPServerTransport({
   onSessionInitialized
 });
 
-// Create and connect a single MCP server instance to the transport
-const server = createMcpServer();
-
 // Handle POST requests for JSON-RPC
 app.post('/mcp', async (req, res) => {
   try {
+    // The transport will automatically handle session IDs
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error('Error handling MCP request:', error);
@@ -263,12 +116,6 @@ app.get('/mcp', async (req, res) => {
 // Handle DELETE requests to end sessions
 app.delete('/mcp', async (req, res) => {
   try {
-    const sessionId = req.headers['mcp-session-id'];
-    if (sessionId && sessions.has(sessionId)) {
-      // Clean up the session
-      sessions.delete(sessionId);
-      console.log(`Session ${sessionId} ended and cleaned up`);
-    }
     await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling session deletion:', error);
@@ -276,11 +123,12 @@ app.delete('/mcp', async (req, res) => {
   }
 });
 
+
 // Start the HTTP MCP server
 async function main() {
   const port = process.env.PORT || 3002;
   
-  // Connect the server to the transport
+  // Connect the transport to the MCP server
   await server.connect(transport);
   
   // Start Express server
