@@ -29,7 +29,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 ## 1. Jira Task Intake and Analysis
 
-1. Read `plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the ticket ID is missing or ambiguous, terminate with an error and do not proceed.
+1. Read `/app/plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the file or the ticket ID is missing or ambiguous, terminate with an error and do not proceed.
 2. Using Jira MCP tools, fetch the task details for the extracted ticket ID.
 3. Derive acceptance criteria and a concise task summary from the description to drive the upcoming test plan.
 4. Do NOT post comments to Jira or send Discord messages in this step. This step is read-only discovery.
@@ -39,11 +39,61 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 ## 2. Initial Setup
 
+### Workspace and Path Invariants
+
+1. The container working directory is `/app`. Treat `/app/project_dir` as the single project root.
+2. All file system operations MUST use absolute paths under `/app/project_dir`.
+3. Never rely on or change the process CWD. For Git, use `git -C /app/project_dir ...`. For npm, use `npm --prefix /app/project_dir ...`.
+4. Do not read or write outside `/app/project_dir`.
+5. Before leaving Initial Setup, validate that `/app/project_dir` exists, is a Git work tree, and its `origin` matches the target repo. If any check fails, terminate with a clear error.
+
 ### Repository Setup
 
-1. Clone the GitHub repository using the pre-configured environment variables:
+1. Clone the GitHub repository into `/app/project_dir` using environment variables with validation and idempotency. The agent MUST execute the following sequence without user interaction:
    ```bash
-   git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git project_dir
+   set -eu
+   
+   PROJECT_ROOT="/app/project_dir"
+   : "${GITHUB_OWNER:?GITHUB_OWNER is required}"
+   : "${GITHUB_REPO:?GITHUB_REPO is required}"
+   : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+   
+   DESIRED_SLUG="${GITHUB_OWNER}/${GITHUB_REPO}"
+   REPO_URL="${GITHUB_REPOSITORY_URL:-https://${GITHUB_TOKEN}@github.com/${DESIRED_SLUG}.git}"
+   
+   # Clean up invalid or mismatched directories
+   if [ -d "$PROJECT_ROOT/.git" ]; then
+     git -C "$PROJECT_ROOT" remote get-url origin > /tmp/origin.txt || echo "" > /tmp/origin.txt
+     read origin < /tmp/origin.txt
+     # Normalize origin to owner/repo slug
+     case "$origin" in
+       git@github.com:*) origin_path="${origin#git@github.com:}" ;;
+       https://*github.com/*) origin_path="${origin#*github.com/}" ;;
+       *) origin_path="" ;;
+     esac
+     origin_slug="${origin_path%.git}"
+     if [ "$origin_slug" != "$DESIRED_SLUG" ]; then
+       rm -rf "$PROJECT_ROOT"
+     fi
+   fi
+   
+   # Clone if missing
+   if [ ! -d "$PROJECT_ROOT/.git" ]; then
+     rm -rf "$PROJECT_ROOT"
+     git clone --filter=blob:none "$REPO_URL" "$PROJECT_ROOT"
+   fi
+   
+   # Validate repository
+   git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree >/dev/null
+   git -C "$PROJECT_ROOT" remote get-url origin > /tmp/remote_now.txt
+   read remote_now < /tmp/remote_now.txt
+   case "$remote_now" in
+     git@github.com:*) remote_path="${remote_now#git@github.com:}" ;;
+     https://*github.com/*) remote_path="${remote_now#*github.com/}" ;;
+     *) remote_path="" ;;
+   esac
+   remote_slug="${remote_path%.git}"
+   test "$remote_slug" = "$DESIRED_SLUG" || { echo "Remote mismatch for project_dir (expected $DESIRED_SLUG, got $remote_slug)"; exit 20; }
    ```
 
 ### Branch Management
@@ -54,11 +104,40 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
+Branch management commands (non-interactive, absolute-path, fail-fast):
+```bash
+set -eu
+
+PROJECT_ROOT="/app/project_dir"
+test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 40; }
+
+# Extract Jira ticket ID from /app/plan.md
+# Extract Jira ticket ID without command substitution
+awk -F': ' '/^- Jira Ticket ID:/{print $2}' /app/plan.md | tr -d ' \t' > /tmp/jira_id.txt || echo "" > /tmp/jira_id.txt
+read JIRA_ID < /tmp/jira_id.txt
+test -n "$JIRA_ID" || { echo "Missing Jira Ticket ID in /app/plan.md"; exit 41; }
+
+# Safety checks
+case "$JIRA_ID" in main|master|HEAD|'' ) echo "Invalid branch name from Jira ID: $JIRA_ID"; exit 42;; esac
+
+git -C "$PROJECT_ROOT" fetch --prune
+if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$JIRA_ID"; then
+  git -C "$PROJECT_ROOT" checkout "$JIRA_ID"
+else
+  git -C "$PROJECT_ROOT" checkout -b "$JIRA_ID"
+fi
+```
+
 ### Project Dependencies
 
 1. Install dependencies automatically:
    ```bash
-   npm install
+   test -f /app/project_dir/package.json || { echo "Missing /app/project_dir/package.json"; exit 30; }
+   if [ -f /app/project_dir/package-lock.json ]; then
+     npm ci --prefix /app/project_dir
+   else
+     npm install --prefix /app/project_dir
+   fi
    ```
 
 ## 3. Test Creation
@@ -207,9 +286,9 @@ Add logs at these critical points:
 
 ### Run Tests
 
-Execute Jest tests in CI mode:
+Execute Jest tests in CI mode (absolute path):
 ```bash
-npm test -- --watchAll=false
+npm --prefix /app/project_dir test -- --watchAll=false
 ```
 
 ### Analyze and Fix
@@ -229,9 +308,9 @@ npm test -- --watchAll=false
 
 ## 7. Verification
 
-1. Verify all tests pass:
+1. Verify all tests pass (absolute path):
    ```bash
-   npm test -- --watchAll=false
+   npm --prefix /app/project_dir test -- --watchAll=false
    ```
 2. Document all assumptions and decisions in code comments and logs
 
@@ -251,6 +330,25 @@ Automatically generate a report including:
 1. Commit all changes to the task-specific branch
 2. Push changes to task-specific branch
 3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description
+
+Non-interactive, absolute-path git commands (fail-fast):
+```bash
+set -eu
+PROJECT_ROOT="/app/project_dir"
+test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 50; }
+
+# Ensure we are on the Jira branch set earlier
+# Get current branch without command substitution
+git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD > /tmp/current_branch.txt
+read CURRENT_BRANCH < /tmp/current_branch.txt
+test -n "$CURRENT_BRANCH" || { echo "Unable to determine current branch"; exit 51; }
+
+git -C "$PROJECT_ROOT" add -A
+git -C "$PROJECT_ROOT" commit -m "chore($CURRENT_BRANCH): implement task and tests"
+git -C "$PROJECT_ROOT" push -u origin "$CURRENT_BRANCH"
+```
+
+Create the PR using GitHub MCP tools with the current branch as source and `main` as target, including the generated report in the description.
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
@@ -279,6 +377,10 @@ Automatically generate a report including:
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
 5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
-6. **Work Within project_dir**: After cloning, all operations must occur strictly inside `project_dir` which is inside `/app` folder which is also the current directory. Treat it as the project root for the entire workflow.
+6. **Work Within project_dir (enforced)**:
+    - Absolute path root is `/app/project_dir`. Do not use relative paths that escape this directory.
+    - Always use `git -C /app/project_dir ...` and `npm --prefix /app/project_dir ...` for commands.
+    - Never assume current working directory; never read or write outside `/app/project_dir`.
+    - If any operation attempts to access paths outside `/app/project_dir`, terminate with an error.
 7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
 8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
