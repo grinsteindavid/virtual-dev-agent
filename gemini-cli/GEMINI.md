@@ -46,11 +46,6 @@ As an AI agent, you are a senior software engineer and architect with extensive 
    git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git project_dir
    ```
 
-#### Global Execution Context
-- All commands MUST be executed from inside `project_dir`. Treat `project_dir` as the working root for the entire run.
-- If at any point the working directory is not `project_dir`, abort with an error. Do not proceed outside this folder.
-- Do not create, move, or modify files outside `project_dir`.
-
 ### Branch Management
 
 1. **Branch Verification**: Before starting any development work, verify the current Git branch
@@ -284,6 +279,5 @@ Automatically generate a report including:
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
 5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
-6. **Work Within project_dir**: After cloning, all operations must occur strictly inside `project_dir`. Treat it as the project root for the entire workflow.
-7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
-8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
+6. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
+7. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
