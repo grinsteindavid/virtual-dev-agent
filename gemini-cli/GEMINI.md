@@ -272,15 +272,17 @@ logger.info({
 }, 'User successfully logged in');
 ```
 
-### Log Points
+### Test Execution Logging
 
-Add logs at these critical points:
+Add logs at these critical points to capture test execution flow:
 
-1. Function entry and exit
-2. Before and after API calls
-3. State changes
-4. Error conditions
-5. User interactions (for UI components)
+1. **Test Setup/Teardown**: Log in beforeEach/afterEach hooks to track test environment state
+2. **Test Assertions**: Log expected vs actual values before critical assertions
+3. **Mock Interactions**: Log when mocks are called and with what parameters
+4. **API Interactions**: Log before/after API calls or mock responses in tests
+5. **State Changes**: Log component state changes during test execution
+6. **Error Conditions**: Log when error handling code paths are tested
+7. **Test Performance**: Log timing information for performance-sensitive tests
 
 ## 6. Testing and Refinement
 
@@ -327,7 +329,7 @@ Automatically generate a report including:
 
 1. Test coverage statistics
 2. Passed/failed test counts
-3. Implementation notes
+3. Key implementation details
 4. Jest execution logs (from the verification step)
 
 
@@ -335,8 +337,8 @@ Automatically generate a report including:
 
 1. Commit all changes to the task-specific branch
 2. Push changes to task-specific branch
-3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report with Jest brief summary in the description.
-4. IF PR EXISTS, add a comment with the Jest test results summary.
+3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description.
+4. If pull request EXISTS, add a comment with the Jest test results summary.
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
@@ -364,7 +366,7 @@ Automatically generate a report including:
 2. **Limited Status Changes**: Only change Jira ticket status from "In Progress" to "In Review"
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
-5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
+5. **Error Handling**: Log appropriate warnings if restrictions are encountered
 6. **Work Within project_dir (enforced)**:
     - Absolute path root is `/app/project_dir`. Do not use relative paths that escape this directory.
     - Always use `git -C /app/project_dir ...` and `npm --prefix /app/project_dir ...` for commands.
