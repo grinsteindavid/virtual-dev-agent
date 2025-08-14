@@ -43,6 +43,7 @@ export function registerJiraTools(server, jira) {
           summary: issue.fields.summary,
           description: JSON.stringify(issue.fields.description) || 'No description',
           attachments: JSON.stringify(issue.fields.attachment) || 'No attachments',
+          comments: JSON.stringify(issue.fields.comment) || 'No comments',
           status: issue.fields.status.name,
           assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
           priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
@@ -61,6 +62,7 @@ export function registerJiraTools(server, jira) {
                   `Priority: ${taskDetails.priority}\n` +
                   `Description: ${taskDetails.description}\n` +
                   `Attachments: ${taskDetails.attachments}\n` +
+                  `Comments: ${taskDetails.comments}\n` +
                   `Created: ${taskDetails.created}\n` +
                   `Updated: ${taskDetails.updated}`
           }]
