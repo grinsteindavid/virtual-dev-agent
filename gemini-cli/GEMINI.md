@@ -254,14 +254,14 @@ Automatically generate a report including:
 ### Submit Changes
 
 1. Commit all changes to the task-specific branch
-2. Create a pull request with the generated report in the description
+2. Push changes to task-specific branch
+3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
  - All acceptance criteria for the Jira ticket are met in code.
  - All Jest tests pass (Step 7 Verification complete).
  - Changes are committed to the task branch and a Pull Request has been created (Submit Changes step complete).
- - Current working directory is `project_dir/`.
  
   1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
   2. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" only
