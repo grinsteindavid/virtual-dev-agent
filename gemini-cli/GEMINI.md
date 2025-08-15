@@ -363,7 +363,26 @@ Automatically generate a report including:
    - Example: `[DP-4] Implement user authentication with JWT and add login form validation`
 2. Push changes to task-specific branch
 3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description.
-4. If pull request EXISTS, add a comment with the Jest test results summary.
+4. If pull request EXISTS, add a comment that includes:
+   - Jest test results summary
+   - Latest commit SHA (short) that was pushed
+   - Concise key implementation details (bullet points)
+
+   Example PR comment:
+
+   ```
+   Jest Test Results Summary:
+   Test Suites: 3 passed, 3 total
+   Tests:       7 passed, 7 total
+   Snapshots:   0 total
+   Time:        1.02 s
+
+   Commit: abc1234
+   Key Implementation Details:
+   - Add Contact page with form (`src/pages/Contact.tsx`)
+   - Validate required fields with React Hook Form
+   - Add unit tests for submit handler (`src/pages/__tests__/Contact.test.tsx`)
+   ```
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
