@@ -74,13 +74,12 @@ docker-compose up
 ## What the Agent Does (high level)
 
 The behavior follows `gemini-cli/GEMINI.md`:
-
-1. Jira Task Intake and Analysis
-   - Parse `plan.md` for the Jira ticket ID
-   - Query Jira via MCP to fetch the task details (read-only)
-2. Initial Setup
+1. Initial Setup
    - Clone the target GitHub repo and install dependencies
    - Ensure work happens on a branch named exactly as the Jira ticket (e.g., `DP-4`)
+2. Jira Task Intake and Analysis
+   - Parse `plan.md` for the Jira ticket ID
+   - Query Jira via MCP to fetch the task details (read-only)
 3. Test Creation
    - Create Jest tests first (TDD), covering happy paths, edge cases, and error handling
 4. Code Implementation
