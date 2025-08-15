@@ -20,24 +20,17 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 2. **Comprehensive Logging**: Include detailed logging for debugging and monitoring
 3. **Code Quality**: Follow best practices for clean, maintainable code
 4. **Documentation**: Document all code thoroughly
-5. **Non-Interactive Execution**: All processes must run without requiring user input
+5. **Non-Interactive Execution**: All processes must run without requiring user input. NEVER ask questions like "What would you like to do next?" - the workflow must proceed automatically through all steps
 6. **No Hallucinations**: If there is no clear path forward or insufficient information to complete a task, end the task rather than making assumptions or hallucinating solutions
-7. **Direct Action**: As an AI agent, execute tasks directly without asking questions; make informed decisions based on available information
-8. **Strict Workflow Adherence**: Follow the Development Workflow steps strictly in order; do not skip, reorder, or short-circuit any step.
+7. **Direct Action**: As an AI agent, execute tasks directly without asking questions; make informed decisions based on available information and proceed through the mandatory workflow steps
+8. **Complete Workflow Execution**: ALWAYS execute the FULL workflow from Step 1 (Initial Setup) through Step 6 (Reporting and Submission), regardless of perceived task completion status. Never exit early if a task appears to be completed - validate and verify through the entire workflow.
+9. **Task Focus**: The Jira ticket is the single source of truth for requirements. Do not deviate from the specified task goals, add unrelated features, or expand scope beyond what is explicitly requested in the ticket description and acceptance criteria.
 
 # Development Workflow: Step-by-Step
 
-## 1. Jira Task Intake and Analysis
+## 1. Initial Setup
 
-1. Read `/app/plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the file or the ticket ID is missing or ambiguous, terminate with an error and do not proceed.
-2. Using Jira MCP tools, fetch the task details for the extracted ticket ID.
-3. Derive acceptance criteria and a concise task summary from the description to drive the upcoming test plan.
-4. Do NOT post comments to Jira or send Discord messages in this step. This step is read-only discovery.
-5. Proceed to repository setup only after successfully retrieving the task information.
-6. **Analyze Requirements**: Understand the Jira story requirements thoroughly
-7. **Plan Implementation**: Create a mental model of the implementation approach
-
-## 2. Initial Setup
+**MANDATORY EXECUTION**: This step MUST be executed first, regardless of task status or existing work. Do NOT skip this step or ask for user input.
 
 ### Workspace and Path Invariants
 
@@ -102,7 +95,8 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 2. **Avoid Main Branch**: Never commit code directly to the main branch
 3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `DP-5` or `DP-6` or `PROJ-7`)
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
-5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
+5. **Branch Continuation**: If the branch already exists, check it out and continue working on the Jira ticket task using the requirements from the Jira description and comments
+6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
 Branch management commands (non-interactive, absolute-path, fail-fast):
 ```bash
@@ -122,9 +116,13 @@ case "$JIRA_ID" in main|master|HEAD|'' ) echo "Invalid branch name from Jira ID:
 
 git -C "$PROJECT_ROOT" fetch --prune
 if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$JIRA_ID"; then
+  # Branch exists - check it out and continue the task
   git -C "$PROJECT_ROOT" checkout "$JIRA_ID"
+  echo "Continuing work on existing branch $JIRA_ID for Jira ticket"
 else
+  # Branch doesn't exist - create new branch
   git -C "$PROJECT_ROOT" checkout -b "$JIRA_ID"
+  echo "Created new branch $JIRA_ID for Jira ticket"
 fi
 ```
 
@@ -140,7 +138,32 @@ fi
    fi
    ```
 
-## 3. Test Creation
+**MANDATORY PROGRESSION**: After completing this step, IMMEDIATELY proceed to Step 2 (Jira Task Intake and Analysis). Do NOT ask questions, wait for input, or terminate the workflow. The agent MUST continue to the next step automatically.
+
+## 2. Jira Task Intake and Analysis
+
+1. Read `/app/plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the file or the ticket ID is missing or ambiguous, send a Discord alert using the Discord MCP tools with details of the error, then terminate with an error and do not proceed. **EXCEPTION**: This is the only allowed Discord message during this step.
+2. Using Jira MCP tools, fetch the task details for the extracted ticket ID.
+3. Derive acceptance criteria and a concise task summary from the description to drive the upcoming test plan.
+4. Do NOT post comments to Jira or send Discord messages in this step except for the missing Jira ticket error alert. This step is otherwise read-only discovery.
+5. **Analyze Requirements**: Understand the Jira story requirements thoroughly
+6. **Plan Implementation**: Create a mental model of the implementation approach
+7. **CRITICAL: Task Completion Status Handling**: 
+   - If the task appears to be completed (has PR links, comments indicating completion, etc.), DO NOT terminate the workflow or ask questions.
+   - ALWAYS proceed through ALL workflow steps regardless of perceived task completion status.
+   - The agent must NEVER make a determination to exit early based on task status.
+   - Even for "completed" tasks, execute the full workflow to validate and verify the implementation.
+8. **MANDATORY PROGRESSION**: After completing this step, IMMEDIATELY proceed to Step 3 (Code Implementation). Do NOT ask questions, wait for input, or terminate the workflow. The agent MUST continue to the next step automatically.
+
+## 3. Code Implementation
+
+### Implementation Assessment
+
+**PREREQUISITE**: This assessment can ONLY be performed after completing Steps 1 and 2 (Initial Setup and Jira Task Intake).
+
+1. **Evaluate Existing Code**: After completing repository setup and branch checkout, assess if the current codebase already implements the Jira ticket requirements
+2. **Skip if Complete**: If the existing implementation already aligns with the Jira task goals and meets all acceptance criteria, skip the remaining Code Implementation steps and proceed directly to Step 5 (Verification).
+3. **Document Assessment**: Log the decision to skip or proceed with implementation based on the evaluation
 
 ### Jest Test Files
 
@@ -203,8 +226,6 @@ describe('ComponentName', () => {
 });
 ```
 
-## 4. Code Implementation
-
 ### Implementation Process
 
 1. **Write Minimal Code**: Write the minimum code needed to pass tests
@@ -247,9 +268,9 @@ ComponentName.defaultProps = {
 export default ComponentName;
 ```
 
-## 5. Add Logging
+### Add Logging
 
-### Log Levels
+#### Log Levels
 
 Use appropriate log levels:
 
@@ -258,7 +279,7 @@ Use appropriate log levels:
 - `info`: For significant events in normal operation
 - `debug`: For detailed debugging information
 
-### Logging Format
+#### Logging Format
 
 Include relevant context in logs:
 
@@ -272,17 +293,19 @@ logger.info({
 }, 'User successfully logged in');
 ```
 
-### Log Points
+#### Test Execution Logging
 
-Add logs at these critical points:
+Add logs at these critical points to capture test execution flow:
 
-1. Function entry and exit
-2. Before and after API calls
-3. State changes
-4. Error conditions
-5. User interactions (for UI components)
+1. **Test Setup/Teardown**: Log in beforeEach/afterEach hooks to track test environment state
+2. **Test Assertions**: Log expected vs actual values before critical assertions
+3. **Mock Interactions**: Log when mocks are called and with what parameters
+4. **API Interactions**: Log before/after API calls or mock responses in tests
+5. **State Changes**: Log component state changes during test execution
+6. **Error Conditions**: Log when error handling code paths are tested
+7. **Test Performance**: Log timing information for performance-sensitive tests
 
-## 6. Testing and Refinement
+## 4. Testing and Refinement
 
 ### Run Tests
 
@@ -306,7 +329,7 @@ npm --prefix /app/project_dir test -- --watchAll=false
 1. Add JSDoc comments to all functions and classes
 2. Update any relevant documentation files
 
-## 7. Verification
+## 5. Verification
 
 1. Verify all tests pass and capture the logs (absolute path):
    ```bash
@@ -314,16 +337,12 @@ npm --prefix /app/project_dir test -- --watchAll=false
    npm --prefix /app/project_dir test -- --watchAll=false > /tmp/jest_logs.txt 2>&1
    test_exit_code=$?
    
-   # Store test logs for PR description
-   mkdir -p /app/project_dir/.reports
-   cp /tmp/jest_logs.txt /app/project_dir/.reports/jest_execution_logs.txt
-   
    # Exit with the original test exit code
    exit $test_exit_code
    ```
 2. Document all assumptions and decisions in code comments and logs
 
-## 8. Reporting and Submission
+## 6. Reporting and Submission
 
 ### Generate Report
 
@@ -331,133 +350,31 @@ Automatically generate a report including:
 
 1. Test coverage statistics
 2. Passed/failed test counts
-3. Implementation notes
+3. Key implementation details
 4. Jest execution logs (from the verification step)
-5. Any known limitations or future improvements
 
-```bash
-# Generate report with Jest logs without command substitution or heredocs
-# Create report directory (will be excluded from git)
-mkdir -p /app/project_dir/.reports
-
-# Ensure .reports directory is excluded from git
-if [ ! -f "/app/project_dir/.gitignore" ] || ! grep -q "^.reports/$" "/app/project_dir/.gitignore"; then
-  echo ".reports/" >> /app/project_dir/.gitignore
-fi
-
-# Create header part of the report
-echo "# Implementation Report for the Jira task" > /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Test Results" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "<details>" >> /app/project_dir/.reports/pr_report.md
-echo "<summary>Jest Execution Logs</summary>" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo '```' >> /app/project_dir/.reports/pr_report.md
-
-# Append the Jest logs directly
-cat /app/project_dir/.reports/jest_execution_logs.txt >> /app/project_dir/.reports/pr_report.md
-
-# Add footer part of the report
-echo '```' >> /app/project_dir/.reports/pr_report.md
-echo "</details>" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Implementation Notes" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- Key changes implemented" >> /app/project_dir/.reports/pr_report.md
-echo "- Design decisions made" >> /app/project_dir/.reports/pr_report.md
-echo "- Components modified" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Test Coverage" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- Number of tests: [Count]" >> /app/project_dir/.reports/pr_report.md
-echo "- Coverage percentage: [Percentage]" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "## Known Limitations" >> /app/project_dir/.reports/pr_report.md
-echo "" >> /app/project_dir/.reports/pr_report.md
-echo "- List any known limitations or future improvements" >> /app/project_dir/.reports/pr_report.md
-```
 
 ### Submit Changes
 
-1. Commit all changes to the task-specific branch
+1. Commit all changes to the task-specific branch with a descriptive commit message that:
+   - Starts with the Jira ticket ID in brackets (e.g., `[DP-4]`)
+   - Clearly summarizes the implemented changes
+   - Mentions key components or files modified
+   - Example: `[DP-4] Implement user authentication with JWT and add login form validation`
 2. Push changes to task-specific branch
-3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description
-
-Non-interactive, absolute-path git commands (fail-fast):
-```bash
-set -eu
-PROJECT_ROOT="/app/project_dir"
-test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 50; }
-
-# Ensure we are on the Jira branch set earlier
-# Get current branch without command substitution
-git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD > /tmp/current_branch.txt
-read CURRENT_BRANCH < /tmp/current_branch.txt
-test -n "$CURRENT_BRANCH" || { echo "Unable to determine current branch"; exit 51; }
-
-# Make sure .reports is in .gitignore before committing
-if [ ! -f "$PROJECT_ROOT/.gitignore" ] || ! grep -q "^.reports/$" "$PROJECT_ROOT/.gitignore"; then
-  echo ".reports/" >> "$PROJECT_ROOT/.gitignore"
-fi
-
-# Stage all changes except .reports directory
-git -C "$PROJECT_ROOT" add -A
-git -C "$PROJECT_ROOT" reset -- "$PROJECT_ROOT/.reports/"
-git -C "$PROJECT_ROOT" commit -m "chore($CURRENT_BRANCH): implement task and tests"
-git -C "$PROJECT_ROOT" push -u origin "$CURRENT_BRANCH"
-```
-
-Create the PR using GitHub MCP tools with the current branch as source and `main` as target, including the generated report with Jest execution logs in the description:
-
-```bash
-# Use GitHub MCP tools to create PR with the report content that includes Jest logs
-# The PR description is read directly from the file to avoid command substitution
-
-# Example implementation using GitHub MCP tools:
-# 1. Read the PR description from the file
-# 2. Create the PR with the description
-
-# Store the PR number for later use with comments
-PR_NUMBER_FILE="/tmp/pr_number.txt"
-
-# Note: The actual implementation will depend on the specific GitHub MCP tool interface
-# This is a placeholder for the actual implementation
-```
-
-The GitHub MCP tool should be configured to read the PR description from `/app/project_dir/.reports/pr_report.md`, which contains the Jest execution logs in a collapsible section.
-
-After creating the PR, add a comment with the Jest test results summary:
-
-```bash
-# Extract Jest test summary from the logs and add as a PR comment
-# Create the comment content with the Jest summary in a code block
-echo "### Jest Test Results" > /tmp/jest_comment.md
-echo "" >> /tmp/jest_comment.md
-echo '```' >> /tmp/jest_comment.md
-
-# Extract the Jest summary from the logs file
-# Look for lines containing test results and append them to the comment
-grep -A 5 "Test Suites:" /app/project_dir/.reports/jest_execution_logs.txt > /tmp/jest_summary.txt
-
-# Append the extracted summary to the comment file
-cat /tmp/jest_summary.txt >> /tmp/jest_comment.md
-echo '```' >> /tmp/jest_comment.md
-
-# Use GitHub MCP tools to add the comment to the PR
-# The PR number should be available from the previous step
-# This is a placeholder for the actual implementation
-```
+3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description.
+4. If pull request EXISTS, add a comment with the Jest test results summary.
 
 ### Update Jira
  Preconditions (ALL must be true before interacting with Jira or Discord):
  - All acceptance criteria for the Jira ticket are met in code.
- - All Jest tests pass (Step 7 Verification complete).
+ - All Jest tests pass (Step 5 Verification complete).
  - Changes are committed to the task branch and a Pull Request has been created (Submit Changes step complete).
  
   1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
-  2. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" only
-  3. **Add Comments**: Post a concise summary of the completed work, including:
+  2. **Get Available Transitions**: Before attempting to change status, use the `get_transitions` tool to retrieve all available transitions for the task and identify the correct transition ID for moving from "In Progress" to "In Review"
+  3. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" using the transition ID obtained from step 2
+  4. **Add Comments**: Post a concise summary of the completed work, including:
      - Key implementation details
      - Test coverage statistics
      - Any notable challenges or decisions made
@@ -475,11 +392,24 @@ echo '```' >> /tmp/jest_comment.md
 2. **Limited Status Changes**: Only change Jira ticket status from "In Progress" to "In Review"
 3. **Human-Only Status Changes**: All other status transitions must be performed by human team members
 4. **No Progress Updates**: Do not use comments for progress updates or intermediate status reports
-5. **Error Handling**: Log appropriate warnings if status transition restrictions are encountered
+5. **Error Handling**: Send Discord alerts for any restrictions or critical errors encountered, in addition to logging. These alerts are an exception to the 'No Early Communications' rule and should be sent immediately when errors occur.
 6. **Work Within project_dir (enforced)**:
     - Absolute path root is `/app/project_dir`. Do not use relative paths that escape this directory.
     - Always use `git -C /app/project_dir ...` and `npm --prefix /app/project_dir ...` for commands.
     - Never assume current working directory; never read or write outside `/app/project_dir`.
-    - If any operation attempts to access paths outside `/app/project_dir`, terminate with an error.
-7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
-8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
+    - If any operation attempts to access paths outside `/app/project_dir` or `/tmp`, terminate with an error.
+7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created, with the following exceptions:
+    - Discord alerts for critical errors (missing Jira ticket, path validation failures, etc.)
+    - Discord alerts for workflow restriction violations
+    These exception alerts should be clearly marked as errors and include the specific error details.
+8. **Configuration File Restrictions**:
+    - The only configuration file that may be modified is `package.json`, and only to add new modules.
+    - Do not modify existing configuration values in any config files (including `package.json`, `.eslintrc`, `jest.config.js`, etc.).
+    - Changing existing configurations can disrupt the project's build, test, and deployment processes.
+    - If a task requires configuration changes beyond adding new dependencies, terminate with an error message explaining the limitation.
+9. **Path Error Resilience**:
+    - If encountering "File path must be within one of the workspace directories" errors, try alternative paths rather than terminating.
+    - First attempt with `/app/project_dir/` prefix, then try relative paths if absolute paths fail.
+    - Log path resolution attempts and continue with workflow steps even if a specific file operation fails.
+    - Only terminate the workflow if critical path operations fail after multiple retry attempts.
+    - For file operations, validate file existence before operations and provide meaningful error logs.

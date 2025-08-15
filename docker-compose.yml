@@ -12,7 +12,6 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_OWNER=${GITHUB_OWNER}
       - GITHUB_REPO=${GITHUB_REPO}
-      - GITHUB_REPOSITORY_URL=${GITHUB_REPOSITORY_URL}
       # Set GEMINI_SYSTEM_MD to load your custom GEMINI.md as the primary system instruction
       # This is crucial for ensuring your GEMINI.md overrides default behaviors if needed.
       # The value should be the path *inside the container*.
@@ -26,7 +25,7 @@ services:
       # Mount any additional settings or configuration files if needed
       - ./gemini-cli/settings.json:/app/.gemini/settings.json
     restart: 'no'
-    command: ["gemini", "--model", "gemini-2.5-flash","-d","-y", "-p", "@/app/plan.md"]
+    command: ["gemini", "--model", "gemini-2.5-flash-lite","-d","-y", "-p", "@/app/plan.md", "--include-directories", "/tmp"]
     depends_on:
       - discord-mcp
       - github-mcp

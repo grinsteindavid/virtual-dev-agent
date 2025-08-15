@@ -43,6 +43,7 @@ export function registerJiraTools(server, jira) {
           summary: issue.fields.summary,
           description: JSON.stringify(issue.fields.description) || 'No description',
           attachments: JSON.stringify(issue.fields.attachment) || 'No attachments',
+          comments: JSON.stringify(issue.fields.comment) || 'No comments',
           status: issue.fields.status.name,
           assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
           priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
@@ -61,6 +62,7 @@ export function registerJiraTools(server, jira) {
                   `Priority: ${taskDetails.priority}\n` +
                   `Description: ${taskDetails.description}\n` +
                   `Attachments: ${taskDetails.attachments}\n` +
+                  `Comments: ${taskDetails.comments}\n` +
                   `Created: ${taskDetails.created}\n` +
                   `Updated: ${taskDetails.updated}`
           }]
@@ -212,24 +214,58 @@ export function registerJiraTools(server, jira) {
   );
 
   // Tool: Transition task status
-  server.tool(
+  server.registerTool(
     'transition_task_status',
     {
       title: 'Transition Jira Task Status',
       description: 'Change the status of a Jira task using transition ID',
       inputSchema: {
         task_id: z.string().describe('The Jira task ID'),
-        transition_id: z.string().describe('The transition ID to execute'),
+        transition_id: z.string().describe('The transition ID to execute (must be convertible to an integer)'),
         comment: z.string().optional().describe('Optional comment to add with the transition')
       }
     },
     async ({ task_id, transition_id, comment }) => {
       logger.info(`transition_task_status: invoked task_id=${task_id} transition_id=${transition_id}`);
+      
+      // Validate required parameters
+      if (!task_id) {
+        logger.error('transition_task_status: missing task_id parameter');
+        return {
+          content: [{
+            type: 'text',
+            text: 'Error: task_id parameter is required'
+          }]
+        };
+      }
+      
+      if (!transition_id) {
+        logger.error('transition_task_status: missing transition_id parameter');
+        return {
+          content: [{
+            type: 'text',
+            text: 'Error: transition_id parameter is required'
+          }]
+        };
+      }
+      
+      // Convert transition_id to integer
+      const transitionIdInt = parseInt(transition_id, 10);
+      if (isNaN(transitionIdInt)) {
+        logger.error(`transition_task_status: invalid transition_id=${transition_id}, not a valid integer`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Error: transition_id must be a valid integer, received: ${transition_id}`
+          }]
+        };
+      }
+      
       try {
-        // Prepare transition data
+        // Prepare transition data with integer transition ID
         const transitionData = {
           transition: {
-            id: transition_id
+            id: transitionIdInt
           }
         };
         
