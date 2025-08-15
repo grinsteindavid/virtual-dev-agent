@@ -54,6 +54,12 @@ if [ ! -d "/app/project_dir/.git" ]; then
     exit 1
   fi
 fi
+
+# Verify repository is valid (no cd, use -C)
+if ! git -C /app/project_dir rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  echo "ERROR: Invalid git repository"
+  exit 1
+fi
 ```
 
 #### Error Handling and Alerts (Initial Setup)
