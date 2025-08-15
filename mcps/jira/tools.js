@@ -45,6 +45,7 @@ export function registerJiraTools(server, jira) {
           attachments: JSON.stringify(issue.fields.attachment) || 'No attachments',
           comments: JSON.stringify(issue.fields.comment) || 'No comments',
           status: issue.fields.status.name,
+          changelog: JSON.stringify(issue.fields.changelog) || 'No changelog',
           assignee: issue.fields.assignee ? issue.fields.assignee.displayName : 'Unassigned',
           priority: issue.fields.priority ? issue.fields.priority.name : 'No priority',
           created: issue.fields.created,
@@ -63,6 +64,7 @@ export function registerJiraTools(server, jira) {
                   `Description: ${taskDetails.description}\n` +
                   `Attachments: ${taskDetails.attachments}\n` +
                   `Comments: ${taskDetails.comments}\n` +
+                  `Changelog: ${taskDetails.changelog}\n` +
                   `Created: ${taskDetails.created}\n` +
                   `Updated: ${taskDetails.updated}`
           }]
@@ -222,10 +224,9 @@ export function registerJiraTools(server, jira) {
       inputSchema: {
         task_id: z.string().describe('The Jira task ID'),
         transition_id: z.string().describe('The transition ID to execute (must be convertible to an integer)'),
-        comment: z.string().optional().describe('Optional comment to add with the transition')
       }
     },
-    async ({ task_id, transition_id, comment }) => {
+    async ({ task_id, transition_id }) => {
       logger.info(`transition_task_status: invoked task_id=${task_id} transition_id=${transition_id}`);
       
       // Validate required parameters
@@ -267,20 +268,6 @@ export function registerJiraTools(server, jira) {
             id: String(transition_id)
           }
         };
-        
-        // Add comment if provided
-        if (comment) {
-          // Jira v2 update format requires an array of operations
-          transitionData.update = {
-            comment: [
-              {
-                add: {
-                  body: comment
-                }
-              }
-            ]
-          };
-        }
 
         // Execute the transition
         await jira.transitionIssue(task_id, transitionData);
