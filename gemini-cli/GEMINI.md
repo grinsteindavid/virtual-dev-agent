@@ -401,8 +401,10 @@ Automatically generate a report including:
   3. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" using the transition ID obtained from step 2
   4. **Add Comments**: Post a concise summary of the completed work to the Jira task, including:
      - Key implementation details
-     - Test coverage statistics summary
      - Any notable challenges or decisions made
+     - Link to the Pull Request
+     - Jest test results summary
+     - Workflow steps completed
 
 ### Cross-Platform Communication
  Final report only: Send a single, consolidated report after completing the Jira task and passing all tests.
