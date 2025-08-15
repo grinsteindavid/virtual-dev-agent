@@ -23,7 +23,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 5. **Non-Interactive Execution**: All processes must run without requiring user input
 6. **No Hallucinations**: If there is no clear path forward or insufficient information to complete a task, end the task rather than making assumptions or hallucinating solutions
 7. **Direct Action**: As an AI agent, execute tasks directly without asking questions; make informed decisions based on available information
-8. **Strict Workflow Adherence**: Follow the Development Workflow steps strictly in order; do not skip, reorder, or short-circuit any step.
+8. **Task Focus**: The Jira ticket is the single source of truth for requirements. Do not deviate from the specified task goals, add unrelated features, or expand scope beyond what is explicitly requested in the ticket description and acceptance criteria.
 
 # Development Workflow: Step-by-Step
 
@@ -102,7 +102,8 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 2. **Avoid Main Branch**: Never commit code directly to the main branch
 3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `DP-5` or `DP-6` or `PROJ-7`)
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
-5. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
+5. **Branch Continuation**: If the branch already exists, check it out and continue working on the Jira ticket task using the requirements from the Jira description and comments
+6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
 Branch management commands (non-interactive, absolute-path, fail-fast):
 ```bash
@@ -122,9 +123,13 @@ case "$JIRA_ID" in main|master|HEAD|'' ) echo "Invalid branch name from Jira ID:
 
 git -C "$PROJECT_ROOT" fetch --prune
 if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$JIRA_ID"; then
+  # Branch exists - check it out and continue the task
   git -C "$PROJECT_ROOT" checkout "$JIRA_ID"
+  echo "Continuing work on existing branch $JIRA_ID for Jira ticket"
 else
+  # Branch doesn't exist - create new branch
   git -C "$PROJECT_ROOT" checkout -b "$JIRA_ID"
+  echo "Created new branch $JIRA_ID for Jira ticket"
 fi
 ```
 
@@ -204,6 +209,12 @@ describe('ComponentName', () => {
 ```
 
 ## 4. Code Implementation
+
+### Implementation Assessment
+
+1. **Evaluate Existing Code**: First, assess if the current codebase already implements the Jira ticket requirements
+2. **Skip if Complete**: If the existing implementation already aligns with the Jira task goals and meets all acceptance criteria, skip the Code Implementation step and proceed directly to Step 7 (Verification) and continue.
+3. **Document Assessment**: Log the decision to skip or proceed with implementation based on the evaluation
 
 ### Implementation Process
 
@@ -373,13 +384,12 @@ Automatically generate a report including:
     - Never assume current working directory; never read or write outside `/app/project_dir`.
     - If any operation attempts to access paths outside `/app/project_dir` or `/tmp`, terminate with an error.
 7. **No Early Communications**: Do not add Jira comments or send Discord messages until all Jest tests pass and a PR is created. Only a final consolidated report is permitted at the end.
-8. **Step-by-Step Execution**: Execute the Development Workflow strictly in sequence; do not skip or reorder steps.
-9. **Configuration File Restrictions**:
+8. **Configuration File Restrictions**:
     - The only configuration file that may be modified is `package.json`, and only to add new modules.
     - Do not modify existing configuration values in any config files (including `package.json`, `.eslintrc`, `jest.config.js`, etc.).
     - Changing existing configurations can disrupt the project's build, test, and deployment processes.
     - If a task requires configuration changes beyond adding new dependencies, terminate with an error message explaining the limitation.
-10. **Path Error Resilience**:
+9. **Path Error Resilience**:
     - If encountering "File path must be within one of the workspace directories" errors, try alternative paths rather than terminating.
     - First attempt with `/app/project_dir/` prefix, then try relative paths if absolute paths fail.
     - Log path resolution attempts and continue with workflow steps even if a specific file operation fails.
