@@ -368,10 +368,11 @@ Automatically generate a report including:
    - Example: `[DP-4] Implement user authentication with JWT and add login form validation`
 2. Push changes to task-specific branch
 3. Create a pull request with the task-specific branch as the source branch and the main branch as the target branch. Include the generated report in the description.
-4. If pull request EXISTS, add a comment that includes:
-   - Jest test results summary
-   - Latest commit SHA (short) that was pushed
-   - Concise key implementation details (bullet points)
+4. If pull request EXISTS and new commits were pushed during implementation:
+   - Add a comment that includes:
+     - Jest test results summary
+     - Latest commit SHA (short) that was pushed
+     - Concise key implementation details (bullet points)
 
    Example PR comment:
 
