@@ -156,9 +156,15 @@ developer_1    | I am done with the task.
 virtual-dev-agent_developer_1 exited with code 0
 ```
 
+## First commits and Pull request
 <img width="812" height="724" alt="image" src="https://github.com/user-attachments/assets/2150e3ed-06e4-4d97-8709-38b26fc26247" />
 
+## It sent a comment if PR exists and commits were sent as well
+<img width="775" height="347" alt="image" src="https://github.com/user-attachments/assets/0c1bc422-de28-43cb-9227-4c5183879e0c" />
+
+## Jira comment after sending Pull request
 <img width="621" height="557" alt="image" src="https://github.com/user-attachments/assets/7acfb5ce-3bf1-4e38-9a69-9c91ecb58665" />
 
+## Discord alert after sending Pull request
 <img width="652" height="571" alt="image" src="https://github.com/user-attachments/assets/e536d671-8cab-4554-9d76-4f28fa48cee5" />
 
