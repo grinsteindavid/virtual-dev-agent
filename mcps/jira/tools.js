@@ -22,7 +22,7 @@ const logger = winston.createLogger({
  * @param {JiraClient} jira - Initialized Jira client
  */
 export function registerJiraTools(server, jira) {
-  // Tool: Get task details
+  // Get task details
   server.registerTool(
     'get_task',
     {
@@ -79,7 +79,7 @@ export function registerJiraTools(server, jira) {
     }
   );
 
-  // Tool: List tasks
+  // List tasks
   server.registerTool(
     'list_tasks',
     {
@@ -129,7 +129,7 @@ export function registerJiraTools(server, jira) {
     }
   );
 
-  // Tool: Add comment to task
+  // Add comment to task
   server.registerTool(
     'add_comment',
     {
@@ -168,7 +168,7 @@ export function registerJiraTools(server, jira) {
     }
   );
 
-  // Tool: Get available transitions for a task
+  // Get available transitions for a task
   server.registerTool(
     'get_transitions',
     {
@@ -213,7 +213,7 @@ export function registerJiraTools(server, jira) {
     }
   );
 
-  // Tool: Transition task status
+  // Transition task status
   server.registerTool(
     'transition_task_status',
     {
@@ -249,14 +249,13 @@ export function registerJiraTools(server, jira) {
         };
       }
       
-      // Convert transition_id to integer
-      const transitionIdInt = parseInt(transition_id, 10);
-      if (isNaN(transitionIdInt)) {
-        logger.error(`transition_task_status: invalid transition_id=${transition_id}, not a valid integer`);
+      // Validate that transition_id is numeric (Jira transition IDs are numeric strings)
+      if (!/^\d+$/.test(String(transition_id))) {
+        logger.error(`transition_task_status: invalid transition_id=${transition_id}, must be a numeric string`);
         return {
           content: [{
             type: 'text',
-            text: `Error: transition_id must be a valid integer, received: ${transition_id}`
+            text: `Error: transition_id must be a numeric string, received: ${transition_id}`
           }]
         };
       }
@@ -265,14 +264,21 @@ export function registerJiraTools(server, jira) {
         // Prepare transition data with integer transition ID
         const transitionData = {
           transition: {
-            id: transitionIdInt
+            id: String(transition_id)
           }
         };
         
         // Add comment if provided
         if (comment) {
+          // Jira v2 update format requires an array of operations
           transitionData.update = {
-            comment: comment
+            comment: [
+              {
+                add: {
+                  body: comment
+                }
+              }
+            ]
           };
         }
 

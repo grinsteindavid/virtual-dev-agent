@@ -21,7 +21,7 @@ const logger = winston.createLogger({
  * @param {McpServer} server - The MCP server instance
  */
 export function registerDiscordTools(server) {
-  // Tool: Send Discord webhook message
+  // Send Discord webhook message
   server.registerTool(
     'send_webhook_message',
     {
@@ -83,7 +83,7 @@ export function registerDiscordTools(server) {
     }
   );
 
-  // Tool: Send Discord embed message
+  // Send Discord embed message
   server.registerTool(
     'send_embed_message',
     {
@@ -154,7 +154,7 @@ export function registerDiscordTools(server) {
     }
   );
 
-  // Tool: Send notification message
+  // Send notification message
   server.registerTool(
     'send_notification',
     {

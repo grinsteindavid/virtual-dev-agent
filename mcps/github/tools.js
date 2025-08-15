@@ -22,7 +22,7 @@ const logger = winston.createLogger({
  * @param {Octokit} octokit - Initialized Octokit client
  */
 export function registerGithubTools(server, octokit) {
-  // Tool: Get repository information
+  // Get repository information
   server.registerTool(
     'get_repo_info',
     {
@@ -67,7 +67,7 @@ export function registerGithubTools(server, octokit) {
     }
   );
 
-  // Tool: Create issue
+  // Create issue
   server.registerTool(
     'create_issue',
     {
@@ -109,7 +109,7 @@ export function registerGithubTools(server, octokit) {
     }
   );
 
-  // Tool: Create pull request
+  // Create pull request
   server.registerTool(
     'create_pull_request',
     {
@@ -157,7 +157,7 @@ export function registerGithubTools(server, octokit) {
     }
   );
 
-  // Tool: Create pull request comment
+  // Create pull request comment
   server.registerTool(
     'create_pull_request_comment',
     {
@@ -226,7 +226,7 @@ export function registerGithubTools(server, octokit) {
     }
   );
 
-  // Tool: List pull requests
+  // List pull requests
   server.registerTool(
     'list_pull_requests',
     {
