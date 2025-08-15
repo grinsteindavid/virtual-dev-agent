@@ -166,9 +166,9 @@ fi
 
 **PREREQUISITE**: This assessment can ONLY be performed after completing entire Steps 1 and 2 (Initial Setup and Jira Task Intake).
 
-1. **Evaluate Existing Code**: After completing repository setup and branch checkout, assess if the current codebase already implements the Jira ticket requirements
+1. **Evaluate Existing Code**: After completing repository setup and branch checkout, perform an exhaustive assessment to determine if the current codebase already implements the Jira ticket requirements. This evaluation is critical to avoid any code duplication.
 2. **Skip if Complete**: If the existing implementation already aligns with the Jira task goals and meets all acceptance criteria, skip the remaining Code Implementation steps and proceed directly to Step 4 (Testing and Refinement).
-3. **Document Assessment**: Log the decision to skip or proceed with implementation based on the evaluation
+3. **Document Assessment**: Log the decision to skip or proceed with implementation based on the evaluation also in the report.
 
 ### Jest Test Files
 
@@ -398,16 +398,16 @@ Automatically generate a report including:
   1. **Status Validation**: Verify that the current status is "In Progress" before attempting to update
   2. **Get Available Transitions**: Before attempting to change status, use the `get_transitions` tool to retrieve all available transitions for the task and identify the correct transition ID for moving from "In Progress" to "In Review"
   3. **Status Change**: Update Jira ticket status from "In Progress" to "In Review" using the transition ID obtained from step 2
-  4. **Add Comments**: Post a concise summary of the completed work, including:
+  4. **Add Comments**: Post a concise summary of the completed work to the Jira task, including:
      - Key implementation details
-     - Test coverage statistics
+     - Test coverage statistics summary
      - Any notable challenges or decisions made
 
 ### Cross-Platform Communication
- Final report only: Send a single, consolidated report after completing the Jira task and passing all tests. Do not send interim or progress messages.
+ Final report only: Send a single, consolidated report after completing the Jira task and passing all tests.
  The following applies only after the Update Jira preconditions are satisfied:
  
-  1. **Send Identical Updates**: Ensure the same comment summary is sent to both Jira and Discord
+  1. **Send Identical Updates**: Ensure the same comment summary is sent to both Jira task and Discord
   2. **Include References**: Add relevant ticket IDs and PR links in both communications
 
 ## Important Restrictions
