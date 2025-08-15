@@ -44,9 +44,6 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 
 1. Clone the GitHub repository into `/app/project_dir` using environment variables with validation and idempotency. The agent MUST execute the following sequence without user interaction:
 ```bash
-# Create project directory if it doesn't exist
-mkdir -p /app/project_dir
-
 # Clone repository with proper error handling
 if [ ! -d "/app/project_dir/.git" ]; then
   git clone --filter=blob:none "${GITHUB_REPOSITORY_URL:-https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git}" "/app/project_dir"
@@ -56,13 +53,6 @@ if [ ! -d "/app/project_dir/.git" ]; then
     echo "ERROR: Repository clone failed"
     exit 1
   fi
-fi
-
-# Verify repository is valid
-cd /app/project_dir
-if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-  echo "ERROR: Invalid git repository"
-  exit 1
 fi
 ```
 
@@ -85,15 +75,19 @@ fi
 6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
 
 ```bash
-# Extract Jira ticket ID from plan.md
-JIRA_ID=$(grep -oP "Jira Ticket ID: \K[A-Z]+-\d+" /app/plan.md)
-if [ -z "$JIRA_ID" ]; then
+# Extract Jira ticket ID from plan.md without command substitution
+if [ -f /app/plan.md ]; then
+  grep -oP "Jira Ticket ID: \K[A-Z]+-\d+" /app/plan.md > /tmp/jira_id.txt 2>/dev/null || true
+fi
+if [ ! -s /tmp/jira_id.txt ]; then
   echo "ERROR: Could not extract Jira ticket ID from plan.md"
   exit 1
 fi
+IFS= read -r JIRA_ID < /tmp/jira_id.txt
 
-# Check current branch
-CURRENT_BRANCH=$(git -C /app/project_dir branch --show-current)
+# Check current branch without command substitution
+git -C /app/project_dir branch --show-current > /tmp/current_branch.txt 2>/dev/null || true
+IFS= read -r CURRENT_BRANCH < /tmp/current_branch.txt
 
 # Create branch if needed
 if [ "$CURRENT_BRANCH" != "$JIRA_ID" ]; then
@@ -109,8 +103,9 @@ if [ "$CURRENT_BRANCH" != "$JIRA_ID" ]; then
   git -C /app/project_dir config user.email "virtual-dev-agent@example.com"
 fi
 
-# Verify branch checkout was successful
-CURRENT_BRANCH=$(git -C /app/project_dir branch --show-current)
+# Verify branch checkout was successful without command substitution
+git -C /app/project_dir branch --show-current > /tmp/current_branch_verify.txt 2>/dev/null || true
+IFS= read -r CURRENT_BRANCH < /tmp/current_branch_verify.txt
 if [ "$CURRENT_BRANCH" != "$JIRA_ID" ]; then
   echo "ERROR: Failed to checkout branch $JIRA_ID"
   exit 1
