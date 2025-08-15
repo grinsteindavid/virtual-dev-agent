@@ -214,7 +214,7 @@ export function registerJiraTools(server, jira) {
   );
 
   // Tool: Transition task status
-  server.tool(
+  server.registerTool(
     'transition_task_status',
     {
       title: 'Transition Jira Task Status',
