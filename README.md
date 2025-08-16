@@ -2,107 +2,81 @@
 
 A Docker Compose project that creates an automated virtual developer capable of handling tasks from Jira, implementing features in a React application, and creating pull requests in GitHub.
 
-The agent currently works with a boilerplate React application (https://github.com/grinsteindavid/boilerplate-react-app) which it clones as a starting point. The workflow includes:
+The agent currently works with a boilerplate React application (https://github.com/grinsteindavid/boilerplate-react-app) which it clones as a starting point.
 
-1. Fetching tasks from Jira
-2. Creating test files following TDD principles
-3. Implementing the required features
-4. Updating Jira task status to "In Review"
-5. Adding a comprehensive summary comment in Jira
-6. Creating a pull request in GitHub (if one doesn't exist)
+## Overview
+Virtual Developer Agent automates end-to-end delivery of Jira tasks into a GitHub repository with tests, PRs, and final reporting.
+It runs non-interactively in Docker Compose and coordinates with MCP servers for GitHub, Jira, and Discord.
+Key docs: `gemini-cli/GEMINI.md`, `docker-compose.yml`, `gemini-cli/settings.json`.
 
-Future enhancements will include a server with webhooks to fully automate the development task execution process.
+## Architecture
+- __Developer service (`gemini-cli/`)__: Runs the Gemini CLI with system instructions from `/app/GEMINI.md` and a plan at `/app/plan.md`.
+- __MCP servers (`mcps/`)__: HTTP JSON-RPC servers:
+  - Discord: `mcps/discord/mcp-server.js` on port 3001
+  - GitHub: `mcps/github/mcp-server.js` on port 3002
+  - Jira: `mcps/jira/index.js` on port 3003
+- __Transport__: Express + `StreamableHTTPServerTransport` at `/mcp` with `mcp-session-id` headers. Endpoints configured in `gemini-cli/settings.json`.
+- __Data flow__: Jira ticket -> clone repo -> branch -> implement + tests -> push -> PR -> Jira transition -> Discord summary.
 
 ## Prerequisites
+- __Docker & Docker Compose__
+- __GitHub__: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
+- __Jira__: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, `JIRA_PROJECT`
+- __Discord__: `DISCORD_WEBHOOK_URL`
+- __Gemini__: `GEMINI_API_KEY`
 
-- Docker and Docker Compose installed
-- Credentials and tokens for the integrations you will use
-  - GitHub: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO` (and optionally `GITHUB_REPOSITORY_URL`)
-  - Jira: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, `JIRA_PROJECT`
-  - Discord: `DISCORD_WEBHOOK_URL`
-  - Gemini API: `GEMINI_API_KEY`
+## Setup
+1. __Create `.env` in repo root__:
+  ```
+  GEMINI_API_KEY=your_gemini_api_key
+  GITHUB_TOKEN=your_github_token
+  GITHUB_OWNER=your_github_owner
+  GITHUB_REPO=boilerplate-react-app
+  JIRA_URL=https://your-domain.atlassian.net
+  JIRA_USERNAME=your_email@example.com
+  JIRA_API_TOKEN=your_jira_api_token
+  JIRA_PROJECT=YOURPROJ
+  DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+  ```
+2. __Set the Jira ticket__ in `gemini-cli/plan.md`, e.g.:
+  ```
+  - Jira Ticket ID: PROJ-123
+  ```
+3. __Optional__: If you change MCP ports/URLs, update `gemini-cli/settings.json`.
+4. __Run__:
+  ```
+  docker-compose up --build
+  ```
 
-## Services
+## Configuration notes
+- `gemini-cli/GEMINI.md` is mounted to `/app/GEMINI.md` and selected via `GEMINI_SYSTEM_MD` in `docker-compose.yml`.
+- `gemini-cli/settings.json` is mounted to `/app/.gemini/settings.json`.
+- The developer container runs non-interactively: `gemini -d -y -p "@/app/plan.md"`.
+- Inside the developer container, the working project root is `/app/project_dir`. All commands use absolute paths (`git -C /app/project_dir`, `npm --prefix /app/project_dir`).
 
-- `developer` (Gemini CLI runner)
-- `discord-mcp` on http://localhost:3001
-- `github-mcp` on http://localhost:3002
-- `jira-mcp` on http://localhost:3003
+## How it works (end-to-end)
+1. __Initial setup__: Clone target repo into `/app/project_dir` and validate remote (see `gemini-cli/GEMINI.md` “Repository Setup”).
+2. __Branch management__: Create/checkout the branch named by the Jira ticket in `gemini-cli/plan.md`.
+3. __Implementation__: Add tests first, implement minimal code to pass them.
+4. __Testing__: Run Jest
+5. __Verification__: Re-run tests, capture logs.
+6. __Reporting & submission__:
+  - Commit and push the task branch.
+  - Create or update the GitHub Pull Request.
+  - Transition Jira from “In Progress” to “In Review” using available transition IDs.
+  - Send a single final summary to Discord.
 
-## Configure
+## Services and endpoints
+- Discord MCP: `http://localhost:3001/health`, `http://localhost:3001/mcp`
+- GitHub MCP: `http://localhost:3002/health`, `http://localhost:3002/mcp`
+- Jira MCP: `http://localhost:3003/health`, `http://localhost:3003/mcp`
 
-1) Create a `.env` file at the repo root with your values:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-
-# GitHub
-GITHUB_TOKEN=ghp_xxx
-GITHUB_OWNER=your_github_user_or_org
-GITHUB_REPO=boilerplate-react-app
-
-# Jira
-JIRA_URL=https://your-domain.atlassian.net
-JIRA_USERNAME=you@example.com
-JIRA_API_TOKEN=atl-token
-JIRA_PROJECT=DP
-
-# Discord
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
-
-2) Define the task in `gemini-cli/plan.md`:
-
-- Ensure it contains a canonical line like: `- Jira Ticket ID: DP-4` (example)
-- Include a clear Task Description and Acceptance Criteria
-
-3) (Optional) Adjust the model/flags by editing `developer` service command in `docker-compose.yml`.
-
-## Quick Start
-
-```bash
-docker-compose up
-```
-
-- This starts all MCP servers and then the `developer` container, which reads:
-  - `gemini-cli/GEMINI.md` for workflow rules
-  - `gemini-cli/plan.md` for the current task
-- To run detached: `docker-compose up -d`
-- View logs: `docker-compose logs -f`
-- Stop: `docker-compose down`
-
-## What the Agent Does (high level)
-
-The behavior follows `gemini-cli/GEMINI.md`:
-1. Initial Setup
-   - Clone the target GitHub repo and install dependencies
-   - Ensure work happens on a branch named exactly as the Jira ticket (e.g., `DP-4`)
-2. Jira Task Intake and Analysis
-   - Parse `plan.md` for the Jira ticket ID
-   - Query Jira via MCP to fetch the task details (read-only)
-3. Test Creation
-   - Create Jest tests first (TDD), covering happy paths, edge cases, and error handling
-4. Code Implementation
-   - Implement just enough code to make tests pass; follow component structure and PropTypes
-5. Add Logging
-   - Add `info`/`debug` logs around key operations
-6. Testing and Refinement
-   - Run Jest in CI mode; iterate until green
-7. Verification
-   - Confirm all tests pass; document assumptions in code comments/logs
-8. Reporting and Submission
-   - Commit, push, and create a Pull Request
-   - Update Jira status from "In Progress" to "In Review" and post one final consolidated summary
-   - Send the same final summary to Discord
-
-Notes:
-- Jira/Discord communications are gated until tests pass and a PR exists (final report only).
-- The ticket ID in `plan.md` must match the actual Jira issue you have permission to view.
-
-## Changing the Target Repository
-
-- Set `GITHUB_OWNER`, `GITHUB_REPO`, and (optionally) `GITHUB_REPOSITORY_URL` in `.env`
-- Ensure the repository contains a valid Node/React project with a `package.json` at its root
+## Why use this project
+- __Automation__: Hands-off implementation from ticket to PR.
+- __Reproducibility__: Non-interactive, deterministic workflow in containers.
+- __Quality gates__: Test-first, coverage goals, and verification steps.
+- __Integrations__: First-class GitHub, Jira, Discord via MCP.
+- __Extensible__: Add new MCP tools or services following the existing pattern.
 
 ## Troubleshooting
 
