@@ -174,7 +174,7 @@ fi
 
 For every Jira story/task, the virtual developer MUST:
 
-1. Create dedicated Jest test files with the naming convention `*.test.js` or `*.spec.js`
+1. Create dedicated Jest test files with the naming convention `*.test.js`
 2. Write tests that cover:
    - Happy path scenarios
    - Edge cases
@@ -274,23 +274,27 @@ export default ComponentName;
 ```
 
 ### Add Logging
+ 
+ #### Purpose and Scope (Testing Only)
+ 
+ Logging in this step is exclusively for tracing what happens in the code during Jest test execution. Do not add operational/production logging. Keep messages concise and side-effect-free. Preferably keep trace logs in test files.
+ 
+ #### Log Levels
+ 
+ When tracing in tests, use appropriate log levels:
+ 
+ - `error`: For errors that prevent normal operation
+ - `warn`: For potential issues that don't stop execution
+ - `info`: For significant events in normal operation
+ - `debug`: For detailed debugging information
 
-#### Log Levels
-
-Use appropriate log levels:
-
-- `error`: For errors that prevent normal operation
-- `warn`: For potential issues that don't stop execution
-- `info`: For significant events in normal operation
-- `debug`: For detailed debugging information
-
-#### Logging Format
-
-Include relevant context in logs:
-
-```javascript
-// Example logging
-logger.info({
+ #### Logging Format
+ 
+ Include minimal relevant context in logs for traceability:
+ 
+ ```javascript
+ // Example logging
+ logger.info({
   action: 'userLogin',
   userId: user.id,
   timestamp: new Date().toISOString(),
@@ -298,17 +302,17 @@ logger.info({
 }, 'User successfully logged in');
 ```
 
-#### Test Execution Logging
-
-Add logs at these critical points to capture test execution flow:
-
-1. **Test Setup/Teardown**: Log in beforeEach/afterEach hooks to track test environment state
-2. **Test Assertions**: Log expected vs actual values before critical assertions
-3. **Mock Interactions**: Log when mocks are called and with what parameters
-4. **API Interactions**: Log before/after API calls or mock responses in tests
-5. **State Changes**: Log component state changes during test execution
-6. **Error Conditions**: Log when error handling code paths are tested
-7. **Test Performance**: Log timing information for performance-sensitive tests
+ #### Test Execution Logging
+ 
+ Within tests, add logs at these critical points to capture execution flow:
+ 
+ 1. **Test Setup/Teardown**: Log in beforeEach/afterEach hooks to track test environment state
+ 2. **Test Assertions**: Log expected vs actual values before critical assertions
+ 3. **Mock Interactions**: Log when mocks are called and with what parameters
+ 4. **API Interactions**: Log before/after API calls or mock responses in tests
+ 5. **State Changes**: Log component state changes during test execution
+ 6. **Error Conditions**: Log when error handling code paths are tested
+ 7. **Test Performance**: Log timing information for performance-sensitive tests
 
 ## 4. Testing and Refinement
 
