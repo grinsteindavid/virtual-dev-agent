@@ -71,6 +71,36 @@ Key docs: `gemini-cli/GEMINI.md`, `docker-compose.yml`, `gemini-cli/settings.jso
 - GitHub MCP: `http://localhost:3002/health`, `http://localhost:3002/mcp`
 - Jira MCP: `http://localhost:3003/health`, `http://localhost:3003/mcp`
 
+## Observability & Logs
+
+- Console logs (recommended):
+  ```bash
+  docker compose logs -f discord-mcp
+  docker compose logs -f github-mcp
+  docker compose logs -f jira-mcp
+  ```
+
+- File logs (inside containers):
+  - Discord: `/app/discord-mcp.log`
+  - GitHub: `/app/github-mcp.log`
+  - Jira: `/app/jira-mcp.log`
+  - Tail example:
+    ```bash
+    # Discord MCP
+    docker ps --filter "name=discord-mcp" --format "{{.ID}}" | xargs -I {} \
+      docker exec -it {} sh -c 'tail -n 200 -f /app/discord-mcp.log'
+    ```
+  - Note: File logs are ephemeral unless you persist them. Prefer `docker compose logs`,
+    or modify the Winston file transport to write to a mounted directory if long-term
+    retention is required.
+
+- Health checks:
+  ```bash
+  curl -f http://localhost:3001/health
+  curl -f http://localhost:3002/health
+  curl -f http://localhost:3003/health
+  ```
+
 ## Why use this project
 - __Automation__: Hands-off implementation from ticket to PR.
 - __Reproducibility__: Non-interactive, deterministic workflow in containers.
