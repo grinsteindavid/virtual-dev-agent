@@ -180,3 +180,6 @@ virtual-dev-agent_developer_1 exited with code 0
 ## Discord alert after sending Pull request
 <img width="838" height="633" alt="image" src="https://github.com/user-attachments/assets/7684c8ed-2a75-4183-b332-da3565a25b5a" />
 
+# Vercel auto deploy integration in the boilerplate repo
+<img width="849" height="629" alt="image" src="https://github.com/user-attachments/assets/a35f6cfc-8e1e-460d-a89f-03b197bc9fae" />
+
