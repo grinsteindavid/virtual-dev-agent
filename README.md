@@ -160,15 +160,23 @@ developer_1    | I am done with the task.
 virtual-dev-agent_developer_1 exited with code 0
 ```
 
+## Prompt for creating the jira ticket description
+<img width="665" height="455" alt="image" src="https://github.com/user-attachments/assets/5836d2d9-9f64-46e5-9b70-2c77ddeb6314" />
+
+## Jira ticket
+<img width="623" height="590" alt="image" src="https://github.com/user-attachments/assets/1b0bc254-8150-49b4-8b56-0b16724aea1e" />
+<img width="638" height="587" alt="image" src="https://github.com/user-attachments/assets/cff47f36-7554-4b9a-8b61-a11515f3c52a" />
+<img width="645" height="430" alt="image" src="https://github.com/user-attachments/assets/bfda1c0c-a1ac-485c-b1da-2d74125ed6ee" />
+
 ## First commits and Pull request
-<img width="812" height="724" alt="image" src="https://github.com/user-attachments/assets/2150e3ed-06e4-4d97-8709-38b26fc26247" />
+<img width="756" height="529" alt="image" src="https://github.com/user-attachments/assets/4e8e03d8-b168-4cf0-bfb8-11ebdc241c20" />
 
 ## It sent a comment if PR exists and commits were sent as well
 <img width="775" height="347" alt="image" src="https://github.com/user-attachments/assets/0c1bc422-de28-43cb-9227-4c5183879e0c" />
 
 ## Jira comment after sending Pull request
-<img width="621" height="557" alt="image" src="https://github.com/user-attachments/assets/7acfb5ce-3bf1-4e38-9a69-9c91ecb58665" />
+<img width="630" height="613" alt="image" src="https://github.com/user-attachments/assets/959a7e71-0240-47e6-8183-111a918ed0a9" />
 
 ## Discord alert after sending Pull request
-<img width="652" height="571" alt="image" src="https://github.com/user-attachments/assets/e536d671-8cab-4554-9d76-4f28fa48cee5" />
+<img width="838" height="633" alt="image" src="https://github.com/user-attachments/assets/7684c8ed-2a75-4183-b332-da3565a25b5a" />
 
