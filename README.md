@@ -172,7 +172,7 @@ virtual-dev-agent_developer_1 exited with code 0
 <img width="756" height="529" alt="image" src="https://github.com/user-attachments/assets/4e8e03d8-b168-4cf0-bfb8-11ebdc241c20" />
 
 ## It sends a comment if PR exists and commits were sent as well
-<img width="775" height="347" alt="image" src="https://github.com/user-attachments/assets/0c1bc422-de28-43cb-9227-4c5183879e0c" />
+<img width="770" height="447" alt="image" src="https://github.com/user-attachments/assets/db4a3adb-91e5-463f-b4e6-2ae39b61d378" />
 
 ## Jira comment after sending Pull request
 <img width="630" height="613" alt="image" src="https://github.com/user-attachments/assets/959a7e71-0240-47e6-8183-111a918ed0a9" />
