@@ -96,7 +96,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Continuation**: If the branch already exists, check it out and continue working on the Jira ticket task using the requirements from the Jira description and comments
 6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text.
-7. **Branch Context Snapshot**: Save the last 25 commits from the currently checked-out branch to provide historical context of the repository. This helps the agent understand recent changes, code patterns, and development history, which is crucial for making informed decisions during implementation.
+7. **Branch Context Snapshot**: After changing to the Jira ticket branch, save the last 25 commits from the repository to provide historical context. This helps understand recent changes, code patterns, and development history, which is crucial for making informed decisions during implementation.
 
 Branch management commands (non-interactive, absolute-path, fail-fast):
 ```bash
@@ -162,7 +162,7 @@ echo "Saved commit history to /tmp/branch_last_25_commits.txt"
 
 1. Read `/app/plan.md` and extract the line `- Jira Ticket ID: <ID>`. If the file or the ticket ID is missing or ambiguous, send a Discord alert using the Discord MCP tools with details of the error, then terminate with an error and do not proceed. **EXCEPTION**: This is the only allowed Discord message during this step.
 2. Using Jira MCP tools, fetch the task details for the extracted ticket ID.
-3. Derive acceptance criteria and a concise task summary from the description to drive the upcoming test plan.
+3. Derive acceptance criteria and a concise task summary from the description, title, comments and attachments to drive the upcoming test plan.
 4. Do NOT post comments to Jira or send Discord messages in this step except for the missing Jira ticket error alert. This step is otherwise read-only discovery.
 5. **Analyze Requirements**: Understand the Jira story requirements thoroughly
 6. **Plan Implementation**: Create a mental model of the implementation approach
@@ -176,7 +176,8 @@ echo "Saved commit history to /tmp/branch_last_25_commits.txt"
    - The agent must NEVER make a determination to exit early based on task status.
    - Even for "completed" tasks, execute the full workflow to validate and verify the implementation.
 8. **MANDATORY PROGRESSION**: After completing this step, IMMEDIATELY proceed to Step 3 (Code Implementation). Do NOT ask questions, wait for input, or terminate the workflow. The agent MUST continue to the next step automatically.
-9. Review Branch Commit Snapshot: Read /tmp/branch_last_25_commits.txt (generated in Step 1) to understand prior work on this Jira ticket, detect existing implementations/PR links, and gather context for acceptance criteria derivation. If the snapshot is missing, reconstruct with:
+9. Download Jira Attachments for Multimodal Analysis: Use the Jira MCP tool download_attachments to fetch images, PDFs, and CSVs for the ticket and save locally under `/tmp/jira-attachments` directory.
+10. Review Branch Commit Snapshot: Read /tmp/branch_last_25_commits.txt (generated after branch checkout) to understand prior work on this Jira ticket, detect existing implementations/PR links, and gather context for acceptance criteria derivation. If the snapshot is missing, reconstruct with:
 
 ```bash
 set -eu
@@ -198,7 +199,7 @@ echo "Saved commit history to /tmp/branch_last_25_commits.txt"
 
 **PREREQUISITE**: This assessment can ONLY be performed after completing entire Steps 1 and 2 (Initial Setup and Jira Task Intake).
 
-1. **Evaluate Existing Code**: After completing repository setup and branch checkout, perform an exhaustive assessment to determine if the current codebase already implements the Jira ticket requirements. This evaluation is critical to avoid any code duplication.
+1. **Evaluate Existing Code**: After completing repository setup and branch checkout, perform an exhaustive assessment to determine if the current codebase already implements the Jira ticket requirements including the Jira attachments. This evaluation is critical to avoid any code duplication.
 2. **Skip if Complete**: If the existing implementation already aligns with the Jira task goals and meets all acceptance criteria, skip the remaining Code Implementation steps and proceed directly to Step 4 (Testing and Refinement).
 3. **Document Assessment**: Log the decision to skip or proceed with implementation based on the evaluation also in the report.
 
