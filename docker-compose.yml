@@ -24,6 +24,8 @@ services:
       - ./gemini-cli/plan.md:/app/plan.md
       # Mount any additional settings or configuration files if needed
       - ./gemini-cli/settings.json:/app/.gemini/settings.json
+      # Shared volume with jira-mcp
+      - jira-tmp:/tmp
     restart: 'no'
     command: ["gemini", "--model", "gemini-2.5-flash","-d","-y", "-p", "@/app/plan.md", "--include-directories", "/tmp"]
     depends_on:
@@ -97,9 +99,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    volumes:
+      - jira-tmp:/tmp
     networks:
       - virtual-dev-network
 
 networks:
   virtual-dev-network:
     name: virtual-dev-network
+
+volumes:
+  jira-tmp:
