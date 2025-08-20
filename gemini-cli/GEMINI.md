@@ -96,7 +96,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Continuation**: If the branch already exists, check it out and continue working on the Jira ticket task using the requirements from the Jira description and comments
 6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text.
-7. **Branch Context Snapshot**: After changing to the Jira ticket branch, save the last 25 commits from the repository to provide historical context. This helps understand recent changes, code patterns, and development history, which is crucial for making informed decisions during implementation.
+7. **Branch Context Snapshot**: After changing to the Jira ticket branch, save the last 25 commits from the Jira branch (never main/master) to provide historical context. This helps understand recent changes, code patterns, and development history, which is crucial for making informed decisions during implementation.
 
 Branch management commands (non-interactive, absolute-path, fail-fast):
 ```bash
@@ -127,19 +127,25 @@ fi
 
 #### Branch Context Snapshot (Last 25 commits)
 
-Save the last 25 commits from the currently checked-out branch for context (non-interactive, absolute paths):
+Save the last 25 commits from the Jira ticket branch (never main/master) for context (non-interactive, absolute paths):
 ```bash
 set -eu
 
 PROJECT_ROOT="/app/project_dir"
 test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 40; }
 
-# Update refs without mutating local state and capture recent history
+# Resolve Jira branch explicitly and avoid main/master
+awk -F': ' '/^- Jira Ticket ID:/{print $2}' /app/plan.md | tr -d ' \t' > /tmp/jira_id.txt || echo "" > /tmp/jira_id.txt
+read JIRA_ID < /tmp/jira_id.txt
+test -n "$JIRA_ID" || { echo "Missing Jira Ticket ID in /app/plan.md"; exit 41; }
+case "$JIRA_ID" in main|master|HEAD|'' ) echo "Refusing to use main/master for commit snapshot"; exit 42;; esac
+
+# Update refs without mutating local state and capture recent history for the Jira branch
 git -C "$PROJECT_ROOT" fetch --prune
-git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 \
+git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 "refs/heads/$JIRA_ID" \
   > /tmp/branch_last_25_commits.txt || echo "" > /tmp/branch_last_25_commits.txt
 
-echo "Saved commit history to /tmp/branch_last_25_commits.txt"
+echo "Saved commit history for $JIRA_ID to /tmp/branch_last_25_commits.txt"
 ```
 
 ### Project Dependencies
@@ -177,7 +183,7 @@ echo "Saved commit history to /tmp/branch_last_25_commits.txt"
    - Even for "completed" tasks, execute the full workflow to validate and verify the implementation.
 8. **MANDATORY PROGRESSION**: After completing this step, IMMEDIATELY proceed to Step 3 (Code Implementation). Do NOT ask questions, wait for input, or terminate the workflow. The agent MUST continue to the next step automatically.
 9. Download Jira Attachments for Multimodal Analysis: Use the Jira MCP tool download_attachments to fetch images, PDFs, and CSVs for the ticket and save locally under `/tmp/jira-attachments` directory.
-10. Review Branch Commit Snapshot: Read /tmp/branch_last_25_commits.txt (generated after branch checkout) to understand prior work on this Jira ticket, detect existing implementations/PR links, and gather context for acceptance criteria derivation. If the snapshot is missing, reconstruct with:
+10. Review Branch Commit Snapshot: Read /tmp/branch_last_25_commits.txt (generated after branch checkout) to understand prior work on this Jira ticket, detect existing implementations/PR links, and gather context for acceptance criteria derivation. If the snapshot is missing, reconstruct with the Jira branch (never main/master):
 
 ```bash
 set -eu
@@ -185,12 +191,18 @@ set -eu
 PROJECT_ROOT="/app/project_dir"
 test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 40; }
 
-# Update refs without mutating local state and capture recent history
+# Resolve Jira branch explicitly and avoid main/master
+awk -F': ' '/^- Jira Ticket ID:/{print $2}' /app/plan.md | tr -d ' \t' > /tmp/jira_id.txt || echo "" > /tmp/jira_id.txt
+read JIRA_ID < /tmp/jira_id.txt
+test -n "$JIRA_ID" || { echo "Missing Jira Ticket ID in /app/plan.md"; exit 41; }
+case "$JIRA_ID" in main|master|HEAD|'' ) echo "Refusing to use main/master for commit snapshot"; exit 42;; esac
+
+# Update refs without mutating local state and capture recent history for the Jira branch
 git -C "$PROJECT_ROOT" fetch --prune
-git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 \
+git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 "refs/heads/$JIRA_ID" \
   > /tmp/branch_last_25_commits.txt || echo "" > /tmp/branch_last_25_commits.txt
 
-echo "Saved commit history to /tmp/branch_last_25_commits.txt"
+echo "Saved commit history for $JIRA_ID to /tmp/branch_last_25_commits.txt"
 ```
 
 ## 3. Code Implementation
@@ -310,7 +322,7 @@ export default ComponentName;
  
  #### Purpose and Scope (Testing Only)
  
- Logging in this step is exclusively for tracing what happens in the code during Jest test execution. Do not add operational/production logging. Keep messages concise and side-effect-free. Preferably keep trace logs in test files.
+ Logging in this step is exclusively for tracing what happens in the code during Jest test execution. Do not add operational/production logging. Keep messages concise and side-effect-free. Preferably keep trace logs in test files. These logs are consumed by the agent for analysis; tests MUST NOT mock, stub, or suppress the logger output.
  
  #### Log Levels
  
@@ -332,8 +344,34 @@ export default ComponentName;
   userId: user.id,
   timestamp: new Date().toISOString(),
   metadata: { browser, ip, location }
-}, 'User successfully logged in');
-```
+ }, 'User successfully logged in');
+ ```
+
+ #### Do Not Mock Logging (Agent Visibility)
+ 
+ - Do not replace the logger with `jest.mock(...)`. Keep the real implementation so logs reach stdout and are captured in `/tmp/jest_logs.txt` during Verification.
+ - If you need to assert logs, spy without overriding the implementation:
+ 
+ ```javascript
+ // In a test file
+ import logger from '../../utils/logger';
+ 
+ let infoSpy;
+ beforeEach(() => {
+   infoSpy = jest.spyOn(logger, 'info'); // do not mockImplementation
+ });
+ 
+ afterEach(() => {
+   infoSpy.mockRestore();
+ });
+ 
+ test('emits informative log', () => {
+   // ... exercise code that calls logger.info(...)
+   expect(infoSpy).toHaveBeenCalledWith(expect.any(Object), expect.any(String));
+ });
+ ```
+ 
+ - To reduce noise, adjust log level within tests (e.g., via an environment variable consumed by your logger) rather than mocking or suppressing logs.
 
  #### Test Execution Logging
  
