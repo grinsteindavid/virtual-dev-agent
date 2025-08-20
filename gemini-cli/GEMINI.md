@@ -36,7 +36,7 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 1. The container working directory is `/app`. Treat `/app/project_dir` as the single project root.
 2. All file system operations MUST use absolute paths under `/app/project_dir`.
 3. Never rely on or change the process CWD. For Git, use `git -C /app/project_dir ...`. For npm, use `npm --prefix /app/project_dir ...`.
-4. Do not read or write outside `/app/project_dir`.
+4. Do not read or write outside `/app/project_dir` or `/tmp`.
 5. Before leaving Initial Setup, validate that `/app/project_dir` exists, is a Git work tree, and its `origin` matches the target repo. If any check fails, terminate with a clear error.
 
 ### Repository Setup
@@ -95,7 +95,8 @@ As an AI agent, you are a senior software engineer and architect with extensive 
 3. **Task-Specific Branches**: Work must be done in a branch named after the Jira task ID (e.g., `DP-5` or `DP-6` or `PROJ-7`)
 4. **Branch Creation**: If on main branch, automatically create and switch to a new branch named after the Jira task ID from plan.md
 5. **Branch Continuation**: If the branch already exists, check it out and continue working on the Jira ticket task using the requirements from the Jira description and comments
-6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text
+6. **Branch Naming Convention**: Use the exact Jira ticket ID as the branch name without additional text.
+7. **Branch Context Snapshot**: Save the last 25 commits from the currently checked-out branch to provide historical context of the repository. This helps the agent understand recent changes, code patterns, and development history, which is crucial for making informed decisions during implementation.
 
 Branch management commands (non-interactive, absolute-path, fail-fast):
 ```bash
@@ -123,6 +124,22 @@ else
   git -C "$PROJECT_ROOT" checkout -b "$JIRA_ID"
   echo "Created new branch $JIRA_ID for Jira ticket"
 fi
+
+#### Branch Context Snapshot (Last 25 commits)
+
+Save the last 25 commits from the currently checked-out branch for context (non-interactive, absolute paths):
+```bash
+set -eu
+
+PROJECT_ROOT="/app/project_dir"
+test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 40; }
+
+# Update refs without mutating local state and capture recent history
+git -C "$PROJECT_ROOT" fetch --prune
+git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 \
+  > /tmp/branch_last_25_commits.txt || echo "" > /tmp/branch_last_25_commits.txt
+
+echo "Saved commit history to /tmp/branch_last_25_commits.txt"
 ```
 
 ### Project Dependencies
@@ -159,6 +176,21 @@ fi
    - The agent must NEVER make a determination to exit early based on task status.
    - Even for "completed" tasks, execute the full workflow to validate and verify the implementation.
 8. **MANDATORY PROGRESSION**: After completing this step, IMMEDIATELY proceed to Step 3 (Code Implementation). Do NOT ask questions, wait for input, or terminate the workflow. The agent MUST continue to the next step automatically.
+9. Review Branch Commit Snapshot: Read /tmp/branch_last_25_commits.txt (generated in Step 1) to understand prior work on this Jira ticket, detect existing implementations/PR links, and gather context for acceptance criteria derivation. If the snapshot is missing, reconstruct with:
+
+```bash
+set -eu
+
+PROJECT_ROOT="/app/project_dir"
+test -d "$PROJECT_ROOT/.git" || { echo "project_dir not cloned"; exit 40; }
+
+# Update refs without mutating local state and capture recent history
+git -C "$PROJECT_ROOT" fetch --prune
+git -C "$PROJECT_ROOT" log --decorate --graph --stat --no-color -n 25 \
+  > /tmp/branch_last_25_commits.txt || echo "" > /tmp/branch_last_25_commits.txt
+
+echo "Saved commit history to /tmp/branch_last_25_commits.txt"
+```
 
 ## 3. Code Implementation
 

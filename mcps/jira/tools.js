@@ -3,6 +3,10 @@ import winston from 'winston';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import JiraClient from 'jira-client';
 
+import axios from 'axios';
+import fs from 'node:fs';
+import path from 'node:path';
+
 // Configure logger
 const logger = winston.createLogger({
   level: 'info',
@@ -294,4 +298,208 @@ export function registerJiraTools(server, jira) {
       }
     }
   );
+
+  // Download image attachments for a task
+  server.registerTool(
+    'download_image_attachments',
+    {
+      title: 'Download Jira Image Attachments',
+      description: 'Download all image attachments for a Jira task to a local directory (default: /tmp). Returns saved file paths.',
+      inputSchema: {
+        task_id: z.string().describe('The Jira task ID (e.g., DP-4)'),
+        dest_dir: z.string().default('/tmp').optional().describe('Destination directory to save files (default: /tmp)')
+      }
+    },
+    async ({ task_id, dest_dir = '/tmp' }) => {
+      logger.info(`download_image_attachments: invoked task_id=${task_id} dest_dir=${dest_dir}`);
+      try {
+        // Ensure destination directory exists
+        await fs.promises.mkdir(dest_dir, { recursive: true });
+
+        // Fetch issue to inspect attachments
+        const issue = await jira.findIssue(task_id);
+        const attachments = issue?.fields?.attachment ?? [];
+
+        const exts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'];
+        const isImage = (att) => {
+          const mt = String(att?.mimeType || '');
+          if (mt.startsWith('image/')) return true;
+          const name = String(att?.filename || att?.fileName || '');
+          const lower = name.toLowerCase();
+          return exts.some(ext => lower.endsWith(ext));
+        };
+
+        const imageAttachments = attachments.filter(isImage);
+        if (imageAttachments.length === 0) {
+          logger.info(`download_image_attachments: no image attachments task_id=${task_id}`);
+          return {
+            content: [{
+              type: 'text',
+              text: `No image attachments found for task ${task_id}`
+            }]
+          };
+        }
+
+        const authHeader = 'Basic ' + Buffer.from(`${process.env.JIRA_USERNAME}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+        const savedPaths = [];
+
+        for (const att of imageAttachments) {
+          const url = att.content;
+          const baseName = (att.filename || att.fileName || `attachment-${att.id || ''}`).toString();
+          const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const finalName = `${task_id}-${safeName}`;
+          const destPath = path.join(dest_dir, finalName);
+
+          logger.info(`download_image_attachments: downloading ${url} -> ${destPath}`);
+
+          const response = await axios({
+            method: 'get',
+            url,
+            responseType: 'stream',
+            headers: { 'Authorization': authHeader },
+            timeout: 60000,
+            maxRedirects: 5
+          });
+
+          await new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(destPath);
+            response.data.pipe(writer);
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+
+          savedPaths.push(destPath);
+        }
+
+        logger.info(`download_image_attachments: success task_id=${task_id} count=${savedPaths.length}`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Downloaded ${savedPaths.length} image attachment(s) for ${task_id} to ${dest_dir}:\n` + savedPaths.map(p => `- ${p}`).join('\n')
+          }]
+        };
+      } catch (error) {
+        logger.error(`download_image_attachments: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id, dest_dir });
+        return {
+          content: [{
+            type: 'text',
+            text: `Error downloading image attachments for ${task_id}: ${error.message}`
+          }]
+        };
+      }
+    }
+  );
+
+  // Download attachments (images, pdf, csv, or all)
+  server.registerTool(
+    'download_attachments',
+    {
+      title: 'Download Jira Attachments',
+      description: 'Download attachments filtered by types (image, pdf, csv, or all) to a local directory (default: /tmp). Returns saved file paths.',
+      inputSchema: {
+        task_id: z.string().describe('The Jira task ID (e.g., DP-4)'),
+        types: z.array(z.enum(['image', 'pdf', 'csv', 'all']))
+          .optional()
+          .default(['image', 'pdf', 'csv'])
+          .describe('Attachment types to download. Include "all" to download everything.'),
+        dest_dir: z.string().optional().default('/tmp').describe('Destination directory to save files (default: /tmp)')
+      }
+    },
+    async ({ task_id, types = ['image', 'pdf', 'csv'], dest_dir = '/tmp' }) => {
+      logger.info(`download_attachments: invoked task_id=${task_id} types=${Array.isArray(types) ? types.join(',') : String(types)} dest_dir=${dest_dir}`);
+      try {
+        await fs.promises.mkdir(dest_dir, { recursive: true });
+
+        // Fetch issue and attachments
+        const issue = await jira.findIssue(task_id);
+        const attachments = issue?.fields?.attachment ?? [];
+
+        const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.tif', '.tiff', '.ico', '.heic', '.heif'];
+        const pdfExts = ['.pdf'];
+        const csvExts = ['.csv'];
+
+        const hasExt = (name, exts) => {
+          const lower = String(name || '').toLowerCase();
+          return exts.some(ext => lower.endsWith(ext));
+        };
+
+        const isType = (att, t) => {
+          const mime = String(att?.mimeType || '');
+          const name = String(att?.filename || att?.fileName || '');
+          switch (t) {
+            case 'image':
+              return mime.startsWith('image/') || hasExt(name, imageExts);
+            case 'pdf':
+              return mime.includes('pdf') || hasExt(name, pdfExts);
+            case 'csv':
+              return mime === 'text/csv' || hasExt(name, csvExts);
+            default:
+              return false;
+          }
+        };
+
+        const selected = Array.isArray(types) ? types : [types];
+        const matchAll = selected.includes('all');
+        const filtered = attachments.filter(att => matchAll || selected.some(t => isType(att, t)));
+
+        if (filtered.length === 0) {
+          logger.info(`download_attachments: no matching attachments task_id=${task_id}`);
+          return {
+            content: [{
+              type: 'text',
+              text: `No attachments of requested types found for task ${task_id}`
+            }]
+          };
+        }
+
+        const authHeader = 'Basic ' + Buffer.from(`${process.env.JIRA_USERNAME}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+        const savedPaths = [];
+
+        for (const att of filtered) {
+          const url = att.content;
+          const baseName = (att.filename || att.fileName || `attachment-${att.id || ''}`).toString();
+          const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const finalName = `${task_id}-${safeName}`;
+          const destPath = path.join(dest_dir, finalName);
+
+          logger.info(`download_attachments: downloading ${url} -> ${destPath}`);
+
+          const response = await axios({
+            method: 'get',
+            url,
+            responseType: 'stream',
+            headers: { 'Authorization': authHeader },
+            timeout: 60000,
+            maxRedirects: 5
+          });
+
+          await new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(destPath);
+            response.data.pipe(writer);
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+
+          savedPaths.push(destPath);
+        }
+
+        logger.info(`download_attachments: success task_id=${task_id} count=${savedPaths.length}`);
+        return {
+          content: [{
+            type: 'text',
+            text: `Downloaded ${savedPaths.length} attachment(s) for ${task_id} to ${dest_dir}:\n` + savedPaths.map(p => `- ${p}`).join('\n')
+          }]
+        };
+      } catch (error) {
+        logger.error(`download_attachments: error task_id=${task_id}`, { message: error.message, stack: error.stack, task_id, dest_dir, types });
+        return {
+          content: [{
+            type: 'text',
+            text: `Error downloading attachments for ${task_id}: ${error.message}`
+          }]
+        };
+      }
+    }
+  );
+
 }
