@@ -331,3 +331,7 @@ Redis is automatically started via Docker Compose.
 # Vercel auto deploy integration in the boilerplate repo
 <img width="849" height="629" alt="image" src="https://github.com/user-attachments/assets/a35f6cfc-8e1e-460d-a89f-03b197bc9fae" />
 
+# Celery / Flower
+<img width="625" height="601" alt="image" src="https://github.com/user-attachments/assets/e3aed61a-0f6c-418d-b2e0-19a1ab08acc8" />
+
+
