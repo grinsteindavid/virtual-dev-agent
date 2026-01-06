@@ -17,6 +17,25 @@ Virtual Developer Agent automates end-to-end delivery of Jira tasks:
 ## Architecture
 
 ```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Docker Compose                                   │
+│                                                                          │
+│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐                   │
+│  │  Redis   │◄───│   FastAPI    │    │Celery Worker │                   │
+│  │ (Broker) │    │   (API)      │    │  (AI Tasks)  │                   │
+│  └──────────┘    └──────┬───────┘    └──────┬───────┘                   │
+│       ▲                 │                    │                           │
+│       │      POST /tasks│                    │                           │
+│       │                 ▼                    ▼                           │
+│       │          ┌──────────────────────────────────┐                   │
+│       └──────────│       Celery Task Queue          │                   │
+│                  └──────────────────────────────────┘                   │
+│                                                                          │
+│  ┌──────────────┐                                                       │
+│  │Celery Flower │  Monitoring UI (port 5555)                            │
+│  └──────────────┘                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LangGraph Workflow                           │
 │                                                                 │
@@ -58,7 +77,8 @@ Virtual Developer Agent automates end-to-end delivery of Jira tasks:
   - **`discord.py`** - Discord webhook tools
   - **`filesystem.py`** - File and command tools
 - **`src/clients/`** - API client wrappers
-- **`src/api/`** - Optional FastAPI for webhook triggers
+- **`src/api/`** - FastAPI for task submission
+- **`src/tasks/`** - Celery task definitions
 - **`src/db/`** - Redis checkpointer for state persistence
 
 ## Prerequisites
@@ -87,10 +107,20 @@ Virtual Developer Agent automates end-to-end delivery of Jira tasks:
    make test
    ```
 
-4. **Run workflow for a ticket**:
+4. **Run workflow for a ticket** (via API):
    ```bash
-   make run TICKET=DP-123
+   curl -X POST http://localhost:5000/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"jira_ticket_id": "DP-123"}'
    ```
+
+5. **Check task status**:
+   ```bash
+   curl http://localhost:5000/tasks/{task_id}
+   ```
+
+6. **Monitor with Flower**:
+   Open http://localhost:5555 for Celery monitoring UI
 
 ## Configuration
 
@@ -155,7 +185,13 @@ make clean             # Remove containers and cache
 ### Data Flow
 
 ```
-Input: TICKET=DP-123
+POST /tasks {jira_ticket_id: "DP-123"}
+    │
+    ▼
+FastAPI → Celery Queue (Redis)
+    │
+    ▼
+Celery Worker picks up task
     │
     ▼
 Supervisor → Planner (fetch Jira, create plan)
@@ -170,7 +206,7 @@ Supervisor → Tester (run tests, fix failures)
 Supervisor → Reporter (PR, Jira, Discord)
     │
     ▼
-Output: PR URL, Jira transitioned, Discord notified
+GET /tasks/{id} → {status: "done", pr_url: "..."}
 ```
 
 ## Project Structure
@@ -180,33 +216,33 @@ virtual-dev-agent/
 ├── src/
 │   ├── agents/              # LangGraph agents
 │   │   ├── prompts/         # LLM prompt templates
-│   │   │   ├── implementer.py
-│   │   │   ├── planner.py
-│   │   │   ├── supervisor.py
-│   │   │   └── tester.py
-│   │   ├── parsers.py       # LLM response parsing
-│   │   ├── state.py         # Agent state schema
 │   │   ├── graph.py         # Workflow graph
 │   │   ├── supervisor.py
 │   │   ├── planner.py
 │   │   ├── implementer.py
 │   │   ├── tester.py
 │   │   └── reporter.py
-│   ├── tools/               # LangChain tools (with Pydantic schemas)
+│   ├── tools/               # LangChain tools
 │   │   ├── git.py           # clone, branch, commit, push
 │   │   ├── github.py        # GitHub API
 │   │   ├── jira.py          # Jira API
 │   │   ├── discord.py       # Discord webhooks
 │   │   └── filesystem.py    # File/command operations
+│   ├── tasks/               # Celery tasks
+│   │   └── workflow.py      # run_workflow_task
 │   ├── clients/             # API clients
-│   ├── api/                 # FastAPI (optional)
+│   ├── api/                 # FastAPI endpoints
+│   │   └── routes/tasks.py  # POST/GET /tasks
+│   ├── celery_app.py        # Celery configuration
 │   └── db/                  # Redis checkpointer
 ├── tests/
-│   ├── unit/                # Unit tests (mocked)
+│   ├── unit/                # Unit tests (148 tests)
 │   ├── integration/         # Integration tests
 │   └── mocks/               # Mock implementations
 ├── compose/                 # Docker Compose files
-├── docker/                  # Dockerfiles
+├── docker/
+│   ├── api/                 # API Dockerfile
+│   └── worker/              # Celery worker Dockerfile
 └── docs/                    # Architecture docs
 ```
 
@@ -216,14 +252,37 @@ virtual-dev-agent/
 - **Integration tests**: Require API keys, test full workflow
 
 ```bash
-make test              # Unit tests in Docker (138 tests)
+make test              # Unit tests in Docker (148 tests)
 make test-integration  # Integration tests (requires API keys)
 make test-coverage     # Tests with coverage report
 ```
 
+## Task Queue (Celery)
+
+Workflows are executed asynchronously via Celery with Redis as broker:
+- **Persistence** - Tasks survive API restarts
+- **Retries** - Failed tasks can be retried
+- **Concurrency** - Multiple workflows run in parallel
+- **Monitoring** - Flower UI at http://localhost:5555
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/tasks` | Submit workflow (returns 202) |
+| GET | `/tasks/{id}` | Get task status |
+| DELETE | `/tasks/{id}` | Cancel task |
+
+### Task States
+
+- `PENDING` - Queued, waiting for worker
+- `RUNNING` - Worker executing workflow
+- `SUCCESS` - Completed with result
+- `FAILED` - Error occurred
+
 ## State Persistence
 
-Uses Redis for LangGraph checkpointing:
+Uses Redis for both Celery broker and LangGraph checkpointing:
 - Resume interrupted workflows
 - Inspect state at any point
 - Support concurrent workflows
@@ -237,6 +296,8 @@ Redis is automatically started via Docker Compose.
 | Missing `.env` | `cp .env.example .env` and fill in values |
 | Tests fail | Check mock implementations in `tests/mocks/` |
 | Redis connection error | Ensure Redis is running: `make dev` |
+| Celery worker not processing | Check worker logs: `docker compose logs worker` |
+| Task stuck in PENDING | Verify worker is running and connected to Redis |
 | Jira/GitHub errors | Verify API tokens and permissions |
 | LLM errors | Check `OPENAI_API_KEY` is valid |
 
