@@ -11,21 +11,27 @@ pytestmark = pytest.mark.skipif(
 
 
 class TestTaskEndpoints:
-    """E2E tests for task API endpoints with real Redis/Celery."""
+    """E2E tests for task API endpoints with real Redis/Celery.
     
-    def test_post_tasks_returns_202(self, api_client):
+    Note: These tests create tasks then immediately cancel them
+    to avoid running actual workflows with test ticket IDs.
+    """
+    
+    def test_post_tasks_returns_202(self, api_client, test_jira_ticket):
         """Test POST /tasks returns 202 with task_id."""
-        response = api_client.post("/tasks", json={"jira_ticket_id": "TEST-E2E-1"})
+        response = api_client.post("/tasks", json={"jira_ticket_id": test_jira_ticket})
         
         assert response.status_code == 202
         data = response.json()
         assert "task_id" in data
-        assert data["jira_ticket_id"] == "TEST-E2E-1"
+        assert data["jira_ticket_id"] == test_jira_ticket
         assert data["status"] == "PENDING"
+        
+        api_client.delete(f"/tasks/{data['task_id']}")
     
-    def test_get_task_returns_status(self, api_client):
+    def test_get_task_returns_status(self, api_client, test_jira_ticket):
         """Test GET /tasks/{id} returns task status."""
-        create_response = api_client.post("/tasks", json={"jira_ticket_id": "TEST-E2E-2"})
+        create_response = api_client.post("/tasks", json={"jira_ticket_id": test_jira_ticket})
         task_id = create_response.json()["task_id"]
         
         response = api_client.get(f"/tasks/{task_id}")
@@ -34,6 +40,8 @@ class TestTaskEndpoints:
         data = response.json()
         assert data["task_id"] == task_id
         assert data["status"] in ("PENDING", "RUNNING", "SUCCESS", "FAILED", "done", "failed")
+        
+        api_client.delete(f"/tasks/{task_id}")
     
     def test_get_nonexistent_task_returns_pending(self, api_client):
         """Test GET /tasks/{id} for unknown task returns PENDING."""
@@ -43,9 +51,9 @@ class TestTaskEndpoints:
         data = response.json()
         assert data["status"] == "PENDING"
     
-    def test_delete_task_returns_204(self, api_client):
+    def test_delete_task_returns_204(self, api_client, test_jira_ticket):
         """Test DELETE /tasks/{id} cancels task."""
-        create_response = api_client.post("/tasks", json={"jira_ticket_id": "TEST-E2E-3"})
+        create_response = api_client.post("/tasks", json={"jira_ticket_id": test_jira_ticket})
         task_id = create_response.json()["task_id"]
         
         response = api_client.delete(f"/tasks/{task_id}")

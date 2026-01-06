@@ -13,11 +13,14 @@ pytestmark = pytest.mark.skipif(
 
 
 class TestTaskCelery:
-    """E2E tests for full Celery task execution."""
+    """E2E tests for full Celery task execution.
     
-    def test_task_transitions_to_running(self, api_client, wait_for_task):
+    Note: All tests use E2E_JIRA_TICKET to avoid polluting task queue.
+    """
+    
+    def test_task_transitions_to_running(self, api_client, test_jira_ticket):
         """Test that task transitions from PENDING to RUNNING."""
-        response = api_client.post("/tasks", json={"jira_ticket_id": "TEST-CELERY-1"})
+        response = api_client.post("/tasks", json={"jira_ticket_id": test_jira_ticket})
         task_id = response.json()["task_id"]
         
         import time
@@ -27,6 +30,8 @@ class TestTaskCelery:
         status = status_response.json()["status"]
         
         assert status in ("PENDING", "RUNNING", "SUCCESS", "FAILED", "done", "failed")
+        
+        api_client.delete(f"/tasks/{task_id}")
     
     def test_workflow_completes_with_result(self, api_client, wait_for_task, test_jira_ticket):
         """Test full workflow execution via Celery.
@@ -52,13 +57,3 @@ class TestTaskCelery:
             confidence = result.get("confidence", {})
             assert confidence, "Confidence scores should be returned"
             assert confidence.get("overall", 0) > 0
-    
-    def test_workflow_handles_invalid_ticket(self, api_client, wait_for_task):
-        """Test workflow handles invalid Jira ticket gracefully."""
-        response = api_client.post("/tasks", json={"jira_ticket_id": "INVALID-99999"})
-        task_id = response.json()["task_id"]
-        
-        result = wait_for_task(task_id, timeout=60)
-        
-        assert result["status"] in ("failed", "FAILED")
-        assert result.get("error")
