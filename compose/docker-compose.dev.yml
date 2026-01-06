@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile.dev
+    volumes:
+      - ../src:/app/src
+      - ../tests:/app/tests
+      - ../scripts:/app/scripts
+      - ../logs:/app/logs
+      - ../pyproject.toml:/app/pyproject.toml:ro
+      - ../pytest.ini:/app/pytest.ini:ro
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+    command: ["uvicorn", "src.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "5000", "--reload"]

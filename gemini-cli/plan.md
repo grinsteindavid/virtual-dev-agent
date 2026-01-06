@@ -1,1 +1,0 @@
-- Jira Ticket ID: DP-6
