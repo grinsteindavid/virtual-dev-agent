@@ -1,4 +1,4 @@
-.PHONY: help setup dev prod down logs test test-unit test-integration test-coverage test-local run clean
+.PHONY: help setup dev prod down logs test test-unit test-integration test-e2e test-coverage test-local run clean
 
 # Default target
 help:
@@ -16,6 +16,7 @@ help:
 	@echo "    make test        - Run unit tests in container"
 	@echo "    make test-unit   - Run unit tests in container"
 	@echo "    make test-integration - Run integration tests in container"
+	@echo "    make test-e2e    - Run e2e tests (requires running services)"
 	@echo "    make test-coverage - Run tests with coverage in container"
 	@echo ""
 	@echo "  Testing (Local):"
@@ -62,6 +63,10 @@ test-unit:
 # Run integration tests in container
 test-integration:
 	docker compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml run --rm -e RUN_INTEGRATION_TESTS=1 api pytest tests/integration -v
+
+# Run e2e tests (requires: make dev running + E2E_JIRA_TICKET set)
+test-e2e:
+	set -a && source .env && set +a && RUN_E2E_TESTS=1 E2E_JIRA_TICKET=$(E2E_JIRA_TICKET) uv run pytest tests/e2e -v -s
 
 # Run tests with coverage in container
 test-coverage:

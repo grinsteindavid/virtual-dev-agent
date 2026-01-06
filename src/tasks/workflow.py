@@ -25,10 +25,12 @@ def run_workflow_task(self, jira_ticket_id: str) -> dict:
             self.update_state(state="RUNNING", meta={"jira_ticket_id": jira_ticket_id})
         
         graph = create_dev_workflow()
-        result = graph.invoke({
-            "jira_ticket_id": jira_ticket_id,
-            "status": "pending",
-        })
+        thread_id = task_id or jira_ticket_id
+        
+        result = graph.invoke(
+            {"jira_ticket_id": jira_ticket_id, "status": "pending"},
+            config={"configurable": {"thread_id": thread_id}},
+        )
         
         logger.info(f"Workflow completed for {jira_ticket_id}: {result.get('status')}")
         

@@ -27,18 +27,19 @@ class TesterAgent:
             state.test_iterations += 1
             state.test_results = test_result
             
+            state.status = "testing"
+            state.confidence["testing"] = self._calculate_confidence(
+                test_result=test_result,
+                iterations=state.test_iterations,
+            )
+            
             if test_result["success"]:
-                logger.info("Tester: all tests passed")
-                state.status = "testing"
-                state.confidence["testing"] = 0.9
+                logger.info(f"Tester: all tests passed (confidence: {state.confidence['testing']:.2f})")
             else:
                 logger.warning(f"Tester: tests failed - {test_result.get('summary', 'unknown error')}")
                 
                 if self.llm and state.test_iterations < 3:
                     self._attempt_fix(state, test_result)
-                
-                state.status = "testing"
-                state.confidence["testing"] = 0.5
             
         except Exception as e:
             logger.error(f"Tester error: {e}")
@@ -105,3 +106,30 @@ class TesterAgent:
         
         state.fix_suggestions = response.content[:3000]
         logger.info(f"Tester: stored fix suggestions ({len(state.fix_suggestions)} chars)")
+
+    def _calculate_confidence(self, test_result: dict, iterations: int) -> float:
+        """Calculate testing confidence based on test results and iterations."""
+        if not test_result:
+            return 0.3
+        
+        passed = test_result.get("passed", 0)
+        failed = test_result.get("failed", 0)
+        total = passed + failed
+        
+        if test_result.get("success"):
+            score = 0.85
+            if total > 0:
+                score += 0.1
+            if total >= 5:
+                score += 0.05
+        else:
+            if total > 0:
+                pass_rate = passed / total
+                score = 0.3 + (pass_rate * 0.4)
+            else:
+                score = 0.3
+        
+        iteration_penalty = (iterations - 1) * 0.1
+        score -= iteration_penalty
+        
+        return min(max(round(score, 2), 0.1), 1.0)

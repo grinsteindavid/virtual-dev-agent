@@ -57,9 +57,14 @@ class PlannerAgent:
             
             state.implementation_plan = plan
             state.status = "planning"
-            state.confidence["planning"] = 0.8
+            state.confidence["planning"] = self._calculate_confidence(
+                summary=summary,
+                description=description,
+                comments=comments,
+                plan=plan,
+            )
             
-            logger.info(f"Planner: completed for {state.jira_ticket_id} with {len(comments)} comments")
+            logger.info(f"Planner: completed for {state.jira_ticket_id} (confidence: {state.confidence['planning']:.2f})")
             
         except Exception as e:
             logger.error(f"Planner error: {e}")
@@ -138,3 +143,33 @@ class PlannerAgent:
 Description:
 {description if description else 'No description provided'}
 """
+
+    def _calculate_confidence(
+        self,
+        summary: str,
+        description: str,
+        comments: list[dict],
+        plan: str,
+    ) -> float:
+        """Calculate planning confidence based on ticket quality and plan completeness."""
+        score = 0.5
+        
+        if summary and len(summary) > 10:
+            score += 0.1
+        
+        if description and len(description) > 50:
+            score += 0.15
+        elif description and len(description) > 20:
+            score += 0.08
+        
+        if comments and len(comments) > 0:
+            score += 0.05
+        if comments and len(comments) >= 3:
+            score += 0.05
+        
+        if plan and len(plan) > 200:
+            score += 0.1
+        if plan and any(word in plan.lower() for word in ["test", "component", "file"]):
+            score += 0.05
+        
+        return min(round(score, 2), 1.0)

@@ -57,7 +57,7 @@ export default Greeting;
         
         assert len(fake_llm.calls) == 1
         assert result.status == "implementing"
-        assert result.confidence["implementation"] == 0.7
+        assert 0.5 <= result.confidence["implementation"] <= 1.0
     
     @patch("src.agents.implementer.clone_repo")
     def test_clone_failure_sets_error(self, mock_clone):

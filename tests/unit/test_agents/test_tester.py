@@ -32,7 +32,7 @@ class TestTesterAgent:
         assert result.test_results["passed"] == 5
         assert result.test_results["failed"] == 0
         assert result.status == "testing"
-        assert result.confidence["testing"] == 0.9
+        assert 0.8 <= result.confidence["testing"] <= 1.0
     
     @patch("src.agents.tester.run_command")
     def test_run_tests_failure(self, mock_run_command):
@@ -54,7 +54,7 @@ class TestTesterAgent:
         assert result.test_results["success"] is False
         assert result.test_results["passed"] == 3
         assert result.test_results["failed"] == 2
-        assert result.confidence["testing"] == 0.5
+        assert 0.3 <= result.confidence["testing"] <= 0.7
     
     @patch("src.agents.tester.run_command")
     def test_increments_iteration_counter(self, mock_run_command):

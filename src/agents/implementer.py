@@ -59,9 +59,13 @@ class ImplementerAgent:
             
             state.code_changes = code_changes
             state.status = "implementing"
-            state.confidence["implementation"] = 0.7
+            state.confidence["implementation"] = self._calculate_confidence(
+                code_changes=code_changes,
+                has_context=bool(state.existing_context),
+                has_fix_suggestions=bool(state.fix_suggestions),
+            )
             
-            logger.info(f"Implementer: completed {len(code_changes)} file(s)")
+            logger.info(f"Implementer: completed {len(code_changes)} file(s) (confidence: {state.confidence['implementation']:.2f})")
             
         except Exception as e:
             logger.error(f"Implementer error: {e}")
@@ -255,3 +259,42 @@ export default Feature;
             results.append(result)
         
         return {"success": all(r.get("success") for r in results)}
+
+    def _calculate_confidence(
+        self,
+        code_changes: list[dict],
+        has_context: bool,
+        has_fix_suggestions: bool,
+    ) -> float:
+        """Calculate implementation confidence based on code changes."""
+        if not code_changes:
+            return 0.3
+        
+        score = 0.5
+        
+        num_files = len(code_changes)
+        if num_files >= 1:
+            score += 0.1
+        if num_files >= 2:
+            score += 0.1
+        
+        total_lines = sum(
+            len(c.get("content", "").split("\n"))
+            for c in code_changes
+        )
+        if total_lines > 20:
+            score += 0.1
+        if total_lines > 50:
+            score += 0.05
+        
+        has_tests = any("test" in c.get("file", "").lower() for c in code_changes)
+        if has_tests:
+            score += 0.1
+        
+        if has_context:
+            score += 0.05
+        
+        if has_fix_suggestions:
+            score -= 0.1
+        
+        return min(max(round(score, 2), 0.1), 1.0)

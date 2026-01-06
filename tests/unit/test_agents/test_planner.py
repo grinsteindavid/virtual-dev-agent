@@ -75,7 +75,7 @@ class TestPlannerAgent:
         
         result = agent.run(state)
         
-        assert result.confidence["planning"] == 0.8
+        assert 0.5 <= result.confidence["planning"] <= 1.0
     
     def test_fetches_and_stores_comments(self, mock_jira, fake_llm):
         agent = PlannerAgent(jira_client=mock_jira, llm=fake_llm)
