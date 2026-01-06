@@ -49,7 +49,14 @@ Virtual Developer Agent automates end-to-end delivery of Jira tasks:
 ### Components
 
 - **`src/agents/`** - LangGraph agent implementations
-- **`src/tools/`** - LangChain tools (GitHub, Jira, Discord, Filesystem)
+  - **`prompts/`** - LLM prompt templates (separated per agent)
+  - **`parsers.py`** - LLM response parsing utilities
+- **`src/tools/`** - LangChain tools with Pydantic schemas
+  - **`git.py`** - Git operations (clone, branch, commit, push)
+  - **`github.py`** - GitHub API tools
+  - **`jira.py`** - Jira API tools
+  - **`discord.py`** - Discord webhook tools
+  - **`filesystem.py`** - File and command tools
 - **`src/clients/`** - API client wrappers
 - **`src/api/`** - Optional FastAPI for webhook triggers
 - **`src/db/`** - Redis checkpointer for state persistence
@@ -171,23 +178,36 @@ Output: PR URL, Jira transitioned, Discord notified
 ```
 virtual-dev-agent/
 ├── src/
-│   ├── agents/          # LangGraph agents
-│   │   ├── graph.py     # Workflow graph
+│   ├── agents/              # LangGraph agents
+│   │   ├── prompts/         # LLM prompt templates
+│   │   │   ├── implementer.py
+│   │   │   ├── planner.py
+│   │   │   ├── supervisor.py
+│   │   │   └── tester.py
+│   │   ├── parsers.py       # LLM response parsing
+│   │   ├── state.py         # Agent state schema
+│   │   ├── graph.py         # Workflow graph
 │   │   ├── supervisor.py
 │   │   ├── planner.py
 │   │   ├── implementer.py
 │   │   ├── tester.py
 │   │   └── reporter.py
-│   ├── tools/           # LangChain tools
-│   ├── clients/         # API clients
-│   ├── api/             # FastAPI (optional)
-│   └── db/              # Redis checkpointer
+│   ├── tools/               # LangChain tools (with Pydantic schemas)
+│   │   ├── git.py           # clone, branch, commit, push
+│   │   ├── github.py        # GitHub API
+│   │   ├── jira.py          # Jira API
+│   │   ├── discord.py       # Discord webhooks
+│   │   └── filesystem.py    # File/command operations
+│   ├── clients/             # API clients
+│   ├── api/                 # FastAPI (optional)
+│   └── db/                  # Redis checkpointer
 ├── tests/
-│   ├── unit/            # Unit tests (mocked)
-│   └── integration/     # Integration tests
-├── compose/             # Docker Compose files
-├── docker/              # Dockerfiles
-└── docs/                # Architecture docs
+│   ├── unit/                # Unit tests (mocked)
+│   ├── integration/         # Integration tests
+│   └── mocks/               # Mock implementations
+├── compose/                 # Docker Compose files
+├── docker/                  # Dockerfiles
+└── docs/                    # Architecture docs
 ```
 
 ## Testing
@@ -196,7 +216,7 @@ virtual-dev-agent/
 - **Integration tests**: Require API keys, test full workflow
 
 ```bash
-make test              # Unit tests in Docker (44 tests)
+make test              # Unit tests in Docker (138 tests)
 make test-integration  # Integration tests (requires API keys)
 make test-coverage     # Tests with coverage report
 ```
