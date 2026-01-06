@@ -1,164 +1,234 @@
 # Virtual Developer Agent
 
-A Docker Compose project that creates an automated virtual developer capable of handling tasks from Jira, implementing features in a React application, and creating pull requests in GitHub.
+A LangGraph-based multi-agent system that automates the development workflow from Jira ticket to Pull Request.
 
-The agent currently works with a boilerplate React application (https://github.com/grinsteindavid/boilerplate-react-app) which it clones as a starting point.
+The agent works with a boilerplate React application (https://github.com/grinsteindavid/boilerplate-react-app) which it clones as a starting point.
 
 ## Overview
-Virtual Developer Agent automates end-to-end delivery of Jira tasks into a GitHub repository with tests, PRs, and final reporting.
-It runs non-interactively in Docker Compose and coordinates with MCP servers for GitHub, Jira, and Discord.
-Key docs: `gemini-cli/GEMINI.md`, `docker-compose.yml`, `gemini-cli/settings.json`.
+
+Virtual Developer Agent automates end-to-end delivery of Jira tasks:
+- Fetches Jira ticket details and creates implementation plan
+- Clones repository and creates feature branch
+- Implements code changes using LLM
+- Runs tests and iterates on failures
+- Creates Pull Request on GitHub
+- Updates Jira status and sends Discord notification
 
 ## Architecture
-- __Developer service (`gemini-cli/`)__: Runs the Gemini CLI with system instructions from `/app/GEMINI.md` and a plan at `/app/plan.md`.
-- __MCP servers (`mcps/`)__: HTTP JSON-RPC servers:
-  - Discord: `mcps/discord/mcp-server.js` on port 3001
-  - GitHub: `mcps/github/mcp-server.js` on port 3002
-  - Jira: `mcps/jira/index.js` on port 3003
-- __Transport__: Express + `StreamableHTTPServerTransport` at `/mcp` with `mcp-session-id` headers. Endpoints configured in `gemini-cli/settings.json`.
-- __Data flow__: Jira ticket -> clone repo -> branch -> implement + tests -> push -> PR -> Jira transition -> Discord summary.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LangGraph Workflow                           │
+│                                                                 │
+│   ┌─────────────┐                                               │
+│   │ Supervisor  │◄────────────────────────────┐                 │
+│   └──────┬──────┘                             │                 │
+│          │                                    │                 │
+│   ┌──────┴──────┬──────────┬──────────┐      │                 │
+│   ▼             ▼          ▼          ▼      │                 │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐               │
+│ │ Planner │ │Implement│ │ Tester  │ │Reporter │───────────────┘│
+│ └─────────┘ └─────────┘ └─────────┘ └─────────┘                │
+│                                                                 │
+│ ┌─────────────────────────────────────────────────────────────┐│
+│ │  Tools: GitHub | Jira | Discord | Filesystem                ││
+│ └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Agents
+
+| Agent | Responsibility |
+|-------|----------------|
+| **Supervisor** | Routes workflow to appropriate specialist agent |
+| **Planner** | Fetches Jira ticket, creates implementation plan |
+| **Implementer** | Clones repo, creates branch, writes code |
+| **Tester** | Runs test suite, analyzes failures |
+| **Reporter** | Creates PR, updates Jira, sends Discord notification |
+
+### Components
+
+- **`src/agents/`** - LangGraph agent implementations
+- **`src/tools/`** - LangChain tools (GitHub, Jira, Discord, Filesystem)
+- **`src/clients/`** - API client wrappers
+- **`src/api/`** - Optional FastAPI for webhook triggers
+- **`src/db/`** - Redis checkpointer for state persistence
 
 ## Prerequisites
-- __Docker & Docker Compose__
-- __GitHub__: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
-- __Jira__: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, `JIRA_PROJECT`
-- __Discord__: `DISCORD_WEBHOOK_URL`
-- __Gemini__: `GEMINI_API_KEY`
 
-## Setup
-1. __Create `.env` in repo root__:
-  ```
-  GEMINI_API_KEY=your_gemini_api_key
-  GITHUB_TOKEN=your_github_token
-  GITHUB_OWNER=your_github_owner
-  GITHUB_REPO=boilerplate-react-app
-  JIRA_URL=https://your-domain.atlassian.net
-  JIRA_USERNAME=your_email@example.com
-  JIRA_API_TOKEN=your_jira_api_token
-  JIRA_PROJECT=YOURPROJ
-  DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-  ```
-2. __Set the Jira ticket__ in `gemini-cli/plan.md`, e.g.:
-  ```
-  - Jira Ticket ID: PROJ-123
-  ```
-3. __Optional__: If you change MCP ports/URLs, update `gemini-cli/settings.json`.
-4. __Run__:
-  ```
-  docker-compose up --build
-  ```
+- **Docker & Docker Compose**
+- **OpenAI API Key** (or Anthropic)
+- **GitHub**: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
+- **Jira**: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, `JIRA_PROJECT`
+- **Discord**: `DISCORD_WEBHOOK_URL`
 
-## Configuration notes
-- `gemini-cli/GEMINI.md` is mounted to `/app/GEMINI.md` and selected via `GEMINI_SYSTEM_MD` in `docker-compose.yml`.
-- `gemini-cli/settings.json` is mounted to `/app/.gemini/settings.json`.
-- The developer container runs non-interactively: `gemini -d -y -p "@/app/plan.md"`.
-- Inside the developer container, the working project root is `/app/project_dir`. All commands use absolute paths (`git -C /app/project_dir`, `npm --prefix /app/project_dir`).
+## Quick Start
 
-## How it works (end-to-end)
-1. __Initial setup__: Clone target repo into `/app/project_dir` and validate remote (see `gemini-cli/GEMINI.md` “Repository Setup”).
-2. __Branch management__: Create/checkout the branch named by the Jira ticket in `gemini-cli/plan.md`.
-3. __Implementation__: Add tests first, implement minimal code to pass them.
-4. __Testing__: Run Jest
-5. __Verification__: Re-run tests, capture logs.
-6. __Reporting & submission__:
-  - Commit and push the task branch.
-  - Create or update the GitHub Pull Request.
-  - Transition Jira from “In Progress” to “In Review” using available transition IDs.
-  - Send a single final summary to Discord.
+1. **Create `.env` file**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
 
-## Services and endpoints
-- Discord MCP: `http://localhost:3001/health`, `http://localhost:3001/mcp`
-- GitHub MCP: `http://localhost:3002/health`, `http://localhost:3002/mcp`
-- Jira MCP: `http://localhost:3003/health`, `http://localhost:3003/mcp`
+2. **Build and start**:
+   ```bash
+   make setup
+   ```
 
-## Observability & Logs
+3. **Run unit tests**:
+   ```bash
+   make test
+   ```
 
-- Console logs (recommended):
-  ```bash
-  docker compose logs -f discord-mcp
-  docker compose logs -f github-mcp
-  docker compose logs -f jira-mcp
-  ```
+4. **Run workflow for a ticket**:
+   ```bash
+   make run TICKET=DP-123
+   ```
 
-- File logs (inside containers):
-  - Discord: `/app/discord-mcp.log`
-  - GitHub: `/app/github-mcp.log`
-  - Jira: `/app/jira-mcp.log`
-  - Tail example:
-    ```bash
-    # Discord MCP
-    docker ps --filter "name=discord-mcp" --format "{{.ID}}" | xargs -I {} \
-      docker exec -it {} sh -c 'tail -n 200 -f /app/discord-mcp.log'
-    ```
-  - Note: File logs are ephemeral unless you persist them. Prefer `docker compose logs`,
-    or modify the Winston file transport to write to a mounted directory if long-term
-    retention is required.
+## Configuration
 
-- Health checks:
-  ```bash
-  curl -f http://localhost:3001/health
-  curl -f http://localhost:3002/health
-  curl -f http://localhost:3003/health
-  ```
+Environment variables (`.env`):
 
-## Why use this project
-- __Automation__: Hands-off implementation from ticket to PR.
-- __Reproducibility__: Non-interactive, deterministic workflow in containers.
-- __Quality gates__: Test-first, coverage goals, and verification steps.
-- __Integrations__: First-class GitHub, Jira, Discord via MCP.
-- __Extensible__: Add new MCP tools or services following the existing pattern.
+```bash
+# LLM
+OPENAI_API_KEY=your_openai_api_key
+
+# GitHub
+GITHUB_TOKEN=your_github_token
+GITHUB_OWNER=your_github_owner
+GITHUB_REPO=boilerplate-react-app
+
+# Jira
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_USERNAME=your_email@example.com
+JIRA_API_TOKEN=your_jira_api_token
+JIRA_PROJECT=YOURPROJ
+
+# Discord
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+# Redis (for state persistence)
+REDIS_URL=redis://localhost:6379/0
+
+# Workflow (alternative to --ticket flag)
+TICKET=DP-123
+```
+
+## Make Commands
+
+```bash
+make help              # Show all commands
+
+# Development
+make setup             # Build and start containers
+make dev               # Start with hot-reload
+make down              # Stop containers
+make logs              # View logs
+
+# Testing (all via Docker)
+make test              # Run unit tests
+make test-unit         # Run unit tests (alias)
+make test-integration  # Run integration tests
+make test-coverage     # Tests with coverage
+
+# Workflow
+make run TICKET=DP-123 # Run workflow for ticket
+
+# Cleanup
+make clean             # Remove containers and cache
+```
+
+## How It Works
+
+1. **Planning**: Fetches Jira ticket details, creates step-by-step implementation plan
+2. **Implementation**: Clones target repo, creates branch, implements code using LLM
+3. **Testing**: Runs Jest tests, iterates on failures (max 3 attempts)
+4. **Reporting**: Creates/updates PR, transitions Jira to "In Review", sends Discord summary
+
+### Data Flow
+
+```
+Input: TICKET=DP-123
+    │
+    ▼
+Supervisor → Planner (fetch Jira, create plan)
+    │
+    ▼
+Supervisor → Implementer (clone, branch, code)
+    │
+    ▼
+Supervisor → Tester (run tests, fix failures)
+    │
+    ▼
+Supervisor → Reporter (PR, Jira, Discord)
+    │
+    ▼
+Output: PR URL, Jira transitioned, Discord notified
+```
+
+## Project Structure
+
+```
+virtual-dev-agent/
+├── src/
+│   ├── agents/          # LangGraph agents
+│   │   ├── graph.py     # Workflow graph
+│   │   ├── supervisor.py
+│   │   ├── planner.py
+│   │   ├── implementer.py
+│   │   ├── tester.py
+│   │   └── reporter.py
+│   ├── tools/           # LangChain tools
+│   ├── clients/         # API clients
+│   ├── api/             # FastAPI (optional)
+│   └── db/              # Redis checkpointer
+├── tests/
+│   ├── unit/            # Unit tests (mocked)
+│   └── integration/     # Integration tests
+├── compose/             # Docker Compose files
+├── docker/              # Dockerfiles
+└── docs/                # Architecture docs
+```
+
+## Testing
+
+- **Unit tests**: All dependencies mocked, no network calls
+- **Integration tests**: Require API keys, test full workflow
+
+```bash
+make test              # Unit tests in Docker (44 tests)
+make test-integration  # Integration tests (requires API keys)
+make test-coverage     # Tests with coverage report
+```
+
+## State Persistence
+
+Uses Redis for LangGraph checkpointing:
+- Resume interrupted workflows
+- Inspect state at any point
+- Support concurrent workflows
+
+Redis is automatically started via Docker Compose.
 
 ## Troubleshooting
 
-- Missing `package.json` after clone
-  - Verify `GITHUB_OWNER/GITHUB_REPO` are correct and the React app lives at the repo root
-- Jira issue not found or permission errors
-  - Confirm `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`, and ticket ID in `plan.md`
-- No Discord message
-  - Check `DISCORD_WEBHOOK_URL` and that the workflow reached the final reporting step
-- Rebuild services
-  - `docker-compose build --no-cache && docker-compose up`
+| Issue | Solution |
+|-------|----------|
+| Missing `.env` | `cp .env.example .env` and fill in values |
+| Tests fail | Check mock implementations in `tests/mocks/` |
+| Redis connection error | Ensure Redis is running: `make dev` |
+| Jira/GitHub errors | Verify API tokens and permissions |
+| LLM errors | Check `OPENAI_API_KEY` is valid |
 
-## Example output
+## Documentation
 
-```bash
-developer_1    | I have completed the task for Jira ticket DP-4.
-developer_1    | 
-developer_1    | Implementation Details:
-developer_1    | - Created a new React component Greeting.jsx in src/components.
-developer_1    | - Implemented the Greeting component to display a personalized greeting message.
-developer_1    | - Added PropTypes for name to ensure type validation.
-developer_1    | - Integrated logging using the logger utility for debugging purposes.
-developer_1    | - Created a dedicated Jest test file Greeting.test.jsx in src/components.
-developer_1    | - Wrote comprehensive tests covering happy path scenarios for the Greeting component.
-developer_1    | 
-developer_1    | Test Coverage:
-developer_1    | - All 9 tests passed successfully.
-developer_1    | - Test coverage for the new Greeting component is 100%.
-developer_1    | 
-developer_1    | Pull Request:
-developer_1    | - A pull request has been created for the DP-4 branch: https://github.com/grinsteindavid/boilerplate-react-app/pull/new/DP-4
-developer_1    | 
-developer_1    | Next Steps:
-developer_1    | - The Jira ticket DP-4 status should be updated to "In Review".
-developer_1    | 
-virtual-dev-agent_developer_1 exited with code 0
-```
-```bash
-developer_1    | All steps of the development workflow have been completed. I have successfully:
-developer_1    | 
-developer_1    | 1.  **Initial Setup**: Cloned the repository, created/checked out the `DP-5` branch, and installed dependencies.
-developer_1    | 2.  **Jira Task Intake and Analysis**: Read `plan.md`, fetched Jira task details for `DP-5`, and analyzed requirements. Noted that the task was already "In Review".
-developer_1    | 3.  **Code Implementation**: Attempted to implement the Contact Us page, but encountered merge conflicts due to existing implementation on the remote branch. Resolved conflicts by accepting the remote's version.
-developer_1    | 4.  **Testing and Refinement**: Ran Jest tests, which all passed.
-developer_1    | 5.  **Verification**: Re-ran tests and captured logs.
-developer_1    | 6.  **Reporting and Submission**: Committed resolved conflicts, pushed to the branch, commented on the existing Pull Request #4, updated the Jira task with a comment, and sent a final report to Discord.
-developer_1    | 
-developer_1    | The task is now fully processed according to the guidelines.
-developer_1    | 
-developer_1    | I am done with the task.
-virtual-dev-agent_developer_1 exited with code 0
-```
+- `docs/ARCHITECTURE.md` - System architecture
+- `docs/IMPLEMENTATION_PLAN.md` - Implementation details
+- `docs/TOOLS_MAPPING.md` - MCP to LangGraph tool mapping
+- `docs/TESTING_STRATEGY.md` - Testing approach
+- `docs/FILE_STRUCTURE.md` - Complete file listing
+
+## Example Screenshots
 
 ## Prompt for creating the jira ticket description
 <img width="665" height="455" alt="image" src="https://github.com/user-attachments/assets/5836d2d9-9f64-46e5-9b70-2c77ddeb6314" />
