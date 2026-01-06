@@ -37,5 +37,40 @@ services:
       retries: 3
       start_period: 10s
 
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/worker/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ../logs:/app/logs
+      - worker_workspace:/app/workspace
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 2G
+
+  flower:
+    image: mher/flower:2.0
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    depends_on:
+      - redis
+      - worker
+    restart: unless-stopped
+
 volumes:
   redis_data:
+  worker_workspace:

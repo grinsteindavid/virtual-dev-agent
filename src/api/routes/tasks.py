@@ -1,18 +1,17 @@
-"""Task management endpoints."""
+"""Task management endpoints using Celery."""
 
 from typing import Optional
-from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from celery.result import AsyncResult
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from src.celery_app import celery_app
+from src.tasks.workflow import run_workflow_task
 from src.logger import get_logger
-from src.agents.graph import create_dev_workflow
 
 router = APIRouter()
 logger = get_logger(__name__)
-
-tasks_store: dict = {}
 
 
 class TaskCreate(BaseModel):
@@ -29,64 +28,67 @@ class TaskResponse(BaseModel):
     error: Optional[str] = None
 
 
-def run_workflow(task_id: str, jira_ticket_id: str):
-    """Background task to run the workflow."""
-    logger.info(f"Starting workflow for task {task_id}, ticket {jira_ticket_id}")
+def _get_task_response(task_id: str) -> TaskResponse:
+    """Build TaskResponse from Celery AsyncResult."""
+    result = AsyncResult(task_id, app=celery_app)
     
-    try:
-        graph = create_dev_workflow()
-        result = graph.invoke({
-            "jira_ticket_id": jira_ticket_id,
-            "status": "pending",
-        })
-        
-        tasks_store[task_id] = {
-            "task_id": task_id,
-            "jira_ticket_id": jira_ticket_id,
-            "status": result.get("status", "unknown"),
-            "pr_url": result.get("pr_url"),
-            "error": result.get("error"),
-        }
-        logger.info(f"Workflow completed for task {task_id}: {result.get('status')}")
-        
-    except Exception as e:
-        logger.error(f"Workflow failed for task {task_id}: {e}")
-        tasks_store[task_id] = {
-            "task_id": task_id,
-            "jira_ticket_id": jira_ticket_id,
-            "status": "failed",
-            "error": str(e),
-        }
+    if result.state == "PENDING":
+        return TaskResponse(
+            task_id=task_id,
+            jira_ticket_id="",
+            status="PENDING",
+        )
+    
+    if result.state == "RUNNING":
+        meta = result.info or {}
+        return TaskResponse(
+            task_id=task_id,
+            jira_ticket_id=meta.get("jira_ticket_id", ""),
+            status="RUNNING",
+        )
+    
+    if result.state == "SUCCESS":
+        data = result.result or {}
+        return TaskResponse(
+            task_id=task_id,
+            jira_ticket_id=data.get("jira_ticket_id", ""),
+            status=data.get("status", "done"),
+            pr_url=data.get("pr_url"),
+            error=data.get("error"),
+        )
+    
+    if result.state == "FAILURE":
+        return TaskResponse(
+            task_id=task_id,
+            jira_ticket_id="",
+            status="FAILED",
+            error=str(result.info),
+        )
+    
+    return TaskResponse(task_id=task_id, jira_ticket_id="", status=result.state)
 
 
-@router.post("", status_code=201, response_model=TaskResponse)
-def create_task(task: TaskCreate, background_tasks: BackgroundTasks):
-    """Create a new task to process a Jira ticket."""
-    task_id = str(uuid4())
+@router.post("", status_code=202, response_model=TaskResponse)
+def create_task(task: TaskCreate):
+    """Submit a workflow task to the Celery queue."""
+    result = run_workflow_task.delay(task.jira_ticket_id)
+    logger.info(f"Queued task {result.id} for ticket {task.jira_ticket_id}")
     
-    tasks_store[task_id] = {
-        "task_id": task_id,
-        "jira_ticket_id": task.jira_ticket_id,
-        "status": "pending",
-        "pr_url": None,
-        "error": None,
-    }
-    
-    background_tasks.add_task(run_workflow, task_id, task.jira_ticket_id)
-    
-    logger.info(f"Created task {task_id} for ticket {task.jira_ticket_id}")
-    return tasks_store[task_id]
+    return TaskResponse(
+        task_id=result.id,
+        jira_ticket_id=task.jira_ticket_id,
+        status="PENDING",
+    )
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: str):
-    """Get the status of a task."""
-    if task_id not in tasks_store:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return tasks_store[task_id]
+    """Get task status from Celery."""
+    return _get_task_response(task_id)
 
 
-@router.get("", response_model=list[TaskResponse])
-def list_tasks():
-    """List all tasks."""
-    return list(tasks_store.values())
+@router.delete("/{task_id}", status_code=204)
+def cancel_task(task_id: str):
+    """Cancel a pending or running task."""
+    celery_app.control.revoke(task_id, terminate=True)
+    logger.info(f"Cancelled task {task_id}")
