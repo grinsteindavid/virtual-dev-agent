@@ -311,9 +311,6 @@ Redis is automatically started via Docker Compose.
 
 ## Example Screenshots
 
-## Prompt for creating the jira ticket description
-<img width="665" height="455" alt="image" src="https://github.com/user-attachments/assets/5836d2d9-9f64-46e5-9b70-2c77ddeb6314" />
-
 ## Jira ticket
 <img width="623" height="590" alt="image" src="https://github.com/user-attachments/assets/1b0bc254-8150-49b4-8b56-0b16724aea1e" />
 <img width="638" height="587" alt="image" src="https://github.com/user-attachments/assets/cff47f36-7554-4b9a-8b61-a11515f3c52a" />
