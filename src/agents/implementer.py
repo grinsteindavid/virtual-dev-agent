@@ -11,7 +11,7 @@ from src.logger import get_logger
 logger = get_logger(__name__)
 
 
-IMPLEMENTATION_PROMPT = """You are a React/JavaScript developer implementing a feature based on the plan below.
+IMPLEMENTATION_PROMPT = """You are a React/JavaScript developer implementing a feature using TDD (Test-Driven Development).
 
 Jira Ticket: {ticket_key}
 Summary: {summary}
@@ -20,11 +20,25 @@ Branch: {branch_name}
 Implementation Plan:
 {implementation_plan}
 {context_section}
-Based on the plan, generate the code implementation. For each file you need to create or modify, provide:
+
+**IMPORTANT: You MUST follow TDD - every component/function MUST have a corresponding test file.**
+
+For each feature, provide files in this order:
+1. **Test file first** (e.g., `src/components/__tests__/MyComponent.test.jsx`)
+2. **Implementation file** (e.g., `src/components/MyComponent.jsx`)
+
+Test requirements:
+- Use Jest and React Testing Library
+- Test rendering, props, user interactions
+- Include at least 2-3 test cases per component
+- Import from '@testing-library/react' and 'react-router-dom' as needed
+
+For each file provide:
 1. The file path (relative to project root)
 2. The complete file content
 
 Focus on:
+- Writing tests BEFORE or WITH implementation
 - Clean, readable code
 - Proper imports
 - PropTypes or TypeScript types where appropriate
@@ -119,6 +133,15 @@ class ImplementerAgent:
         
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
+        
+        run_command.invoke({
+            "command": 'git config user.email "virtual-dev@agent.local"',
+            "cwd": repo_path,
+        })
+        run_command.invoke({
+            "command": 'git config user.name "Virtual Dev Agent"',
+            "cwd": repo_path,
+        })
         
         check_remote = run_command.invoke({
             "command": f"git ls-remote --heads origin {branch_name}",
@@ -291,6 +314,8 @@ class ImplementerAgent:
     
     def _parse_code_response(self, content: str) -> list[dict]:
         """Parse LLM response to extract file changes."""
+        import re
+        
         changes = []
         lines = content.split("\n")
         current_file = None
@@ -314,13 +339,32 @@ class ImplementerAgent:
             
             if in_code_block:
                 current_content.append(line)
-            elif "file:" in line.lower() or line.endswith(".js") or line.endswith(".jsx") or line.endswith(".ts") or line.endswith(".tsx"):
-                path = line.replace("File:", "").replace("file:", "").strip()
-                path = path.strip("`").strip("*").strip()
+            else:
+                path = self._extract_file_path(line)
                 if path:
                     current_file = path
         
         return changes if changes else self._placeholder_implementation(AgentState())
+    
+    def _extract_file_path(self, line: str) -> str | None:
+        """Extract clean file path from a line that may contain markdown."""
+        import re
+        
+        extensions = (r'\.test\.jsx?', r'\.test\.tsx?', r'\.jsx?', r'\.tsx?', r'\.css', r'\.json', r'\.md')
+        pattern = r'((?:src|public|components|pages|utils|hooks|styles|tests?|__tests__)[/\w\-\.]*(?:' + '|'.join(extensions) + r'))'
+        
+        match = re.search(pattern, line, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        
+        if "file:" in line.lower():
+            path = line.split(":", 1)[-1].strip()
+            path = re.sub(r'^[\s\d\.\#\*\`]+', '', path)
+            path = path.strip('`* ')
+            if path and '/' in path:
+                return path
+        
+        return None
     
     def _placeholder_implementation(self, state: AgentState) -> list[dict]:
         """Create placeholder implementation when no LLM is available."""
