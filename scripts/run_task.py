@@ -3,6 +3,7 @@
 
 import argparse
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -64,7 +65,11 @@ def main():
             "status": "pending",
         }
         
-        result = graph.invoke(initial_state)
+        thread_id = str(uuid.uuid4())
+        config_dict = {"configurable": {"thread_id": thread_id}}
+        logger.info(f"Thread ID: {thread_id}")
+        
+        result = graph.invoke(initial_state, config=config_dict)
         
         logger.info("=" * 50)
         logger.info("WORKFLOW COMPLETE")
