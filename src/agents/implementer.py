@@ -4,62 +4,14 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from src.agents.state import AgentState
+from src.agents.prompts.implementer import IMPLEMENTATION_PROMPT, COMPLETION_CHECK_PROMPT
+from src.agents.parsers import parse_code_response, parse_completion_check
 from src.clients.github_client import GitHubClient, get_github_client
-from src.config import config
 from src.logger import get_logger
+from src.tools.git import clone_repo, configure_git_user, branch_exists_on_remote, checkout_branch, get_commit_log
+from src.tools.filesystem import run_command, write_file
 
 logger = get_logger(__name__)
-
-
-IMPLEMENTATION_PROMPT = """You are a React/JavaScript developer implementing a feature using TDD (Test-Driven Development).
-
-Jira Ticket: {ticket_key}
-Summary: {summary}
-Branch: {branch_name}
-
-Implementation Plan:
-{implementation_plan}
-{context_section}
-
-**IMPORTANT: You MUST follow TDD - every component/function MUST have a corresponding test file.**
-
-For each feature, provide files in this order:
-1. **Test file first** (e.g., `src/components/__tests__/MyComponent.test.jsx`)
-2. **Implementation file** (e.g., `src/components/MyComponent.jsx`)
-
-Test requirements:
-- Use Jest and React Testing Library
-- Test rendering, props, user interactions
-- Include at least 2-3 test cases per component
-- Import from '@testing-library/react' and 'react-router-dom' as needed
-
-For each file provide:
-1. The file path (relative to project root)
-2. The complete file content
-
-Focus on:
-- Writing tests BEFORE or WITH implementation
-- Clean, readable code
-- Proper imports
-- PropTypes or TypeScript types where appropriate
-- Following React best practices
-
-Respond with the implementation details in a structured format."""
-
-COMPLETION_CHECK_PROMPT = """You are reviewing whether existing code satisfies Jira requirements.
-
-Jira Ticket: {ticket_key}
-Summary: {summary}
-Description: {description}
-
-Existing Implementation:
-{existing_code}
-
-Commit History:
-{commit_history}
-
-Does the existing code fully implement the Jira ticket requirements?
-Respond with JSON: {{"complete": true/false, "reason": "brief explanation"}}"""
 
 
 class ImplementerAgent:
@@ -101,7 +53,7 @@ class ImplementerAgent:
             if self.llm:
                 code_changes = self._generate_implementation(state)
             else:
-                code_changes = self._placeholder_implementation(state)
+                code_changes = self._placeholder_implementation()
             
             self._write_files(repo_path, code_changes)
             
@@ -119,69 +71,35 @@ class ImplementerAgent:
         return state
     
     def _clone_and_setup(self, repo_path: str, branch_name: str) -> dict:
-        """Clone repository and set up branch, detecting if branch already exists."""
-        from src.tools.filesystem import run_command
-        
-        owner = config.github.owner
-        repo = config.github.repo
-        clone_url = f"https://github.com/{owner}/{repo}.git"
-        
-        result = run_command.invoke({
-            "command": f"rm -rf {repo_path} && git clone {clone_url} {repo_path}",
-            "timeout": 120,
-        })
-        
+        """Clone repository and set up branch."""
+        result = clone_repo.invoke({"repo_path": repo_path})
         if not result["success"]:
-            return {"success": False, "error": result["stderr"]}
+            return result
         
-        run_command.invoke({
-            "command": 'git config user.email "virtual-dev@agent.local"',
-            "cwd": repo_path,
-        })
-        run_command.invoke({
-            "command": 'git config user.name "Virtual Dev Agent"',
-            "cwd": repo_path,
-        })
+        configure_git_user.invoke({"repo_path": repo_path})
         
-        check_remote = run_command.invoke({
-            "command": f"git ls-remote --heads origin {branch_name}",
-            "cwd": repo_path,
+        branch_exists = branch_exists_on_remote.invoke({
+            "repo_path": repo_path,
+            "branch_name": branch_name,
         })
-        branch_exists = bool(check_remote.get("stdout", "").strip())
         
         if branch_exists:
-            logger.info(f"Implementer: branch '{branch_name}' exists on remote, checking out")
-            run_command.invoke({
-                "command": f"git fetch origin {branch_name} && git checkout {branch_name}",
-                "cwd": repo_path,
-            })
+            logger.info(f"Implementer: branch '{branch_name}' exists on remote")
+            checkout_branch.invoke({"repo_path": repo_path, "branch_name": branch_name, "create": False})
         else:
             logger.info(f"Implementer: creating new branch '{branch_name}'")
-            run_command.invoke({
-                "command": f"git checkout -b {branch_name}",
-                "cwd": repo_path,
-            })
+            checkout_branch.invoke({"repo_path": repo_path, "branch_name": branch_name, "create": True})
         
-        run_command.invoke({
-            "command": "npm install",
-            "cwd": repo_path,
-            "timeout": 180,
-        })
+        run_command.invoke({"command": "npm install", "cwd": repo_path, "timeout": 180})
         
         return {"success": True, "repo_path": repo_path, "branch_exists": branch_exists}
     
     def _gather_existing_context(self, state: AgentState) -> dict:
-        """Gather context from existing branch: commits, PR comments."""
+        """Gather context from existing branch."""
         context = {"commits": "", "pr_comments": "", "review_comments": ""}
         
         try:
-            from src.tools.filesystem import run_command
-            
-            log_result = run_command.invoke({
-                "command": "git log --oneline -n 10",
-                "cwd": state.repo_path,
-            })
-            context["commits"] = log_result.get("stdout", "")[:1000]
+            context["commits"] = get_commit_log.invoke({"repo_path": state.repo_path, "branch_name": state.branch_name})
             
             github = self._get_github_client()
             prs = github.list_pull_requests(state="all")
@@ -201,8 +119,7 @@ class ImplementerAgent:
                 context["review_comments"] = "\n".join(
                     f"- {c['user']} on {c['path']}: {c['body']}" for c in review_comments[:5]
                 )
-                
-                logger.info(f"Implementer: found PR #{pr_number} with {len(comments)} comments")
+                logger.info(f"Implementer: found PR #{pr_number}")
         except Exception as e:
             logger.warning(f"Implementer: failed to gather context: {e}")
         
@@ -210,26 +127,11 @@ class ImplementerAgent:
     
     def _check_completion(self, state: AgentState) -> bool:
         """Check if existing code already satisfies Jira requirements."""
-        from src.tools.filesystem import run_command
-        
         fields = state.jira_details.get("fields", {})
         summary = fields.get("summary", "")
         description = fields.get("description", "")
         
-        ls_result = run_command.invoke({
-            "command": "find src -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' | head -20",
-            "cwd": state.repo_path,
-        })
-        files = ls_result.get("stdout", "").strip().split("\n")[:5]
-        
-        existing_code = ""
-        for f in files:
-            if f:
-                read_result = run_command.invoke({
-                    "command": f"head -50 {f}",
-                    "cwd": state.repo_path,
-                })
-                existing_code += f"\n--- {f} ---\n{read_result.get('stdout', '')[:500]}"
+        existing_code = self._read_existing_code(state.repo_path)
         
         prompt = COMPLETION_CHECK_PROMPT.format(
             ticket_key=state.jira_ticket_id,
@@ -245,22 +147,28 @@ class ImplementerAgent:
         ]
         
         response = self.llm.invoke(messages)
-        content = response.content.lower()
+        is_complete, reason = parse_completion_check(response.content)
+        logger.info(f"Implementer: completion check: {is_complete} - {reason}")
+        return is_complete
+    
+    def _read_existing_code(self, repo_path: str) -> str:
+        """Read existing source files for context."""
+        ls_result = run_command.invoke({
+            "command": "find src -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' | head -20",
+            "cwd": repo_path,
+        })
+        files = ls_result.get("stdout", "").strip().split("\n")[:5]
         
-        import json
-        import re
-        try:
-            match = re.search(r'\{[^}]+\}', response.content, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-                is_complete = data.get("complete", False)
-                reason = data.get("reason", "")
-                logger.info(f"Implementer: completion check: {is_complete} - {reason}")
-                return is_complete
-        except (json.JSONDecodeError, ValueError):
-            pass
+        existing_code = ""
+        for f in files:
+            if f:
+                read_result = run_command.invoke({
+                    "command": f"head -50 {f}",
+                    "cwd": repo_path,
+                })
+                existing_code += f"\n--- {f} ---\n{read_result.get('stdout', '')[:500]}"
         
-        return '"complete": true' in content or '"complete":true' in content
+        return existing_code
     
     def _build_context_section(self, state: AgentState) -> str:
         """Build context section for implementation prompt."""
@@ -272,7 +180,7 @@ class ImplementerAgent:
                 f"- {c.get('author', 'Unknown')}: {c.get('body', '')[:200]}"
                 for c in jira_comments[:3]
             )
-            sections.append(f"\n## Jira Comments (Additional Requirements)\n{comment_lines}")
+            sections.append(f"\n## Jira Comments\n{comment_lines}")
         
         if state.fix_suggestions:
             sections.append(f"\n## Previous Test Failures\n{state.test_results.get('output', '')[-1000:]}")
@@ -280,11 +188,9 @@ class ImplementerAgent:
         
         if state.existing_context:
             if state.existing_context.get("commits"):
-                sections.append(f"\n## Prior Commits on Branch\n{state.existing_context['commits']}")
+                sections.append(f"\n## Prior Commits\n{state.existing_context['commits']}")
             if state.existing_context.get("pr_comments"):
                 sections.append(f"\n## PR Comments\n{state.existing_context['pr_comments']}")
-            if state.existing_context.get("review_comments"):
-                sections.append(f"\n## Code Review Comments\n{state.existing_context['review_comments']}")
         
         return "\n".join(sections)
     
@@ -293,14 +199,12 @@ class ImplementerAgent:
         fields = state.jira_details.get("fields", {})
         summary = fields.get("summary", "Feature implementation")
         
-        context_section = self._build_context_section(state)
-        
         prompt = IMPLEMENTATION_PROMPT.format(
             ticket_key=state.jira_ticket_id,
             summary=summary,
             branch_name=state.branch_name,
             implementation_plan=state.implementation_plan,
-            context_section=context_section,
+            context_section=self._build_context_section(state),
         )
         
         messages = [
@@ -309,99 +213,38 @@ class ImplementerAgent:
         ]
         
         response = self.llm.invoke(messages)
+        changes = parse_code_response(response.content)
         
-        return self._parse_code_response(response.content)
+        return changes if changes else self._placeholder_implementation()
     
-    def _parse_code_response(self, content: str) -> list[dict]:
-        """Parse LLM response to extract file changes."""
-        import re
-        
-        changes = []
-        lines = content.split("\n")
-        current_file = None
-        current_content = []
-        in_code_block = False
-        
-        for line in lines:
-            if line.startswith("```") and not in_code_block:
-                in_code_block = True
-                continue
-            elif line.startswith("```") and in_code_block:
-                if current_file and current_content:
-                    changes.append({
-                        "file": current_file,
-                        "content": "\n".join(current_content),
-                        "action": "create",
-                    })
-                current_content = []
-                in_code_block = False
-                continue
-            
-            if in_code_block:
-                current_content.append(line)
-            else:
-                path = self._extract_file_path(line)
-                if path:
-                    current_file = path
-        
-        return changes if changes else self._placeholder_implementation(AgentState())
-    
-    def _extract_file_path(self, line: str) -> str | None:
-        """Extract clean file path from a line that may contain markdown."""
-        import re
-        
-        extensions = (r'\.test\.jsx?', r'\.test\.tsx?', r'\.jsx?', r'\.tsx?', r'\.css', r'\.json', r'\.md')
-        pattern = r'((?:src|public|components|pages|utils|hooks|styles|tests?|__tests__)[/\w\-\.]*(?:' + '|'.join(extensions) + r'))'
-        
-        match = re.search(pattern, line, re.IGNORECASE)
-        if match:
-            return match.group(1)
-        
-        if "file:" in line.lower():
-            path = line.split(":", 1)[-1].strip()
-            path = re.sub(r'^[\s\d\.\#\*\`]+', '', path)
-            path = path.strip('`* ')
-            if path and '/' in path:
-                return path
-        
-        return None
-    
-    def _placeholder_implementation(self, state: AgentState) -> list[dict]:
+    def _placeholder_implementation(self) -> list[dict]:
         """Create placeholder implementation when no LLM is available."""
-        return [
-            {
-                "file": "src/components/Feature.jsx",
-                "content": """import React from 'react';
+        return [{
+            "file": "src/components/Feature.jsx",
+            "content": """import React from 'react';
 import PropTypes from 'prop-types';
 
-const Feature = ({ title, description }) => {
-  return (
-    <div className="feature">
-      <h2>{title}</h2>
-      <p>{description}</p>
-    </div>
-  );
-};
+const Feature = ({ title, description }) => (
+  <div className="feature">
+    <h2>{title}</h2>
+    <p>{description}</p>
+  </div>
+);
 
 Feature.propTypes = {
   title: PropTypes.string.isRequired,
   description: PropTypes.string,
 };
 
-Feature.defaultProps = {
-  description: '',
-};
+Feature.defaultProps = { description: '' };
 
 export default Feature;
 """,
-                "action": "create",
-            }
-        ]
+            "action": "create",
+        }]
     
     def _write_files(self, repo_path: str, code_changes: list[dict]) -> dict:
         """Write code changes to files."""
-        from src.tools.filesystem import write_file
-        
         results = []
         for change in code_changes:
             file_path = f"{repo_path}/{change['file']}"
@@ -411,4 +254,4 @@ export default Feature;
             })
             results.append(result)
         
-        return {"success": all(r.get("success") for r in results), "files": results}
+        return {"success": all(r.get("success") for r in results)}

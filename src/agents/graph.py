@@ -52,7 +52,7 @@ def create_dev_workflow(llm=None, checkpointer=None, use_checkpointer=True):
     planner = PlannerAgent(llm=llm)
     implementer = ImplementerAgent(llm=llm)
     tester = TesterAgent(llm=llm)
-    reporter = ReporterAgent(llm=llm)
+    reporter = ReporterAgent()
     
     def supervisor_node(state: GraphState) -> dict:
         """Supervisor node - routes to next agent."""

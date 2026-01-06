@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from src.agents.state import AgentState
 from src.agents.implementer import ImplementerAgent
+from src.agents.parsers import parse_code_response
 from tests.mocks.mock_llm import FakeLLM
 from tests.mocks.mock_github import MockGitHubClient
 
@@ -58,12 +59,11 @@ export default Greeting;
         assert result.status == "implementing"
         assert result.confidence["implementation"] == 0.7
     
-    @patch("src.tools.filesystem.run_command")
-    def test_clone_failure_sets_error(self, mock_run_command):
-        mock_run_command.invoke.return_value = {
+    @patch("src.agents.implementer.clone_repo")
+    def test_clone_failure_sets_error(self, mock_clone):
+        mock_clone.invoke.return_value = {
             "success": False,
-            "stdout": "",
-            "stderr": "fatal: repository not found",
+            "error": "fatal: repository not found",
         }
         
         agent = ImplementerAgent(llm=None)
@@ -79,7 +79,6 @@ export default Greeting;
         assert "Repository setup failed" in result.error
     
     def test_parse_code_response_extracts_files(self):
-        agent = ImplementerAgent(llm=None)
         content = """Here's the code:
 
 File: src/utils/helper.js
@@ -93,23 +92,20 @@ import React from 'react';
 export default () => <div>Widget</div>;
 ```
 """
-        changes = agent._parse_code_response(content)
+        changes = parse_code_response(content)
         
         assert len(changes) >= 1
         assert any("helper" in c.get("content", "") for c in changes)
     
     def test_parse_code_response_handles_empty_content(self):
-        agent = ImplementerAgent(llm=None)
-        changes = agent._parse_code_response("")
+        changes = parse_code_response("")
         
-        assert changes
-        assert changes[0]["file"] == "src/components/Feature.jsx"
+        assert changes == []
     
     def test_placeholder_implementation_structure(self):
         agent = ImplementerAgent(llm=None)
-        state = AgentState(jira_ticket_id="DP-123")
         
-        changes = agent._placeholder_implementation(state)
+        changes = agent._placeholder_implementation()
         
         assert len(changes) == 1
         assert changes[0]["file"] == "src/components/Feature.jsx"
@@ -117,9 +113,16 @@ export default () => <div>Widget</div>;
         assert "React" in changes[0]["content"]
         assert "PropTypes" in changes[0]["content"]
     
-    @patch("src.tools.filesystem.run_command")
-    @patch("src.tools.filesystem.write_file")
-    def test_write_files_called_for_each_change(self, mock_write, mock_run_command):
+    @patch("src.agents.implementer.write_file")
+    @patch("src.agents.implementer.run_command")
+    @patch("src.agents.implementer.checkout_branch")
+    @patch("src.agents.implementer.branch_exists_on_remote")
+    @patch("src.agents.implementer.configure_git_user")
+    @patch("src.agents.implementer.clone_repo")
+    def test_write_files_called_for_each_change(self, mock_clone, mock_config, mock_branch_exists, mock_checkout, mock_run_command, mock_write):
+        mock_clone.invoke.return_value = {"success": True}
+        mock_branch_exists.invoke.return_value = False
+        mock_checkout.invoke.return_value = {"success": True}
         mock_run_command.invoke.return_value = {"success": True, "stdout": "", "stderr": ""}
         mock_write.invoke.return_value = {"success": True}
         
@@ -135,9 +138,9 @@ export default () => <div>Widget</div>;
         
         assert mock_write.invoke.called
     
-    @patch("src.tools.filesystem.run_command")
-    def test_run_handles_exception(self, mock_run_command):
-        mock_run_command.invoke.side_effect = Exception("Unexpected error")
+    @patch("src.agents.implementer.clone_repo")
+    def test_run_handles_exception(self, mock_clone):
+        mock_clone.invoke.side_effect = Exception("Unexpected error")
         
         agent = ImplementerAgent(llm=None)
         state = AgentState(
@@ -171,15 +174,16 @@ export default () => <div>Widget</div>;
 class TestImplementerBranchDetection:
     """Tests for branch detection and existing context."""
     
-    @patch("src.tools.filesystem.run_command")
-    def test_detects_existing_branch(self, mock_run_command):
-        def run_side_effect(params):
-            cmd = params.get("command", "")
-            if "ls-remote" in cmd:
-                return {"success": True, "stdout": "abc123 refs/heads/DP-123", "stderr": ""}
-            return {"success": True, "stdout": "", "stderr": ""}
-        
-        mock_run_command.invoke.side_effect = run_side_effect
+    @patch("src.agents.implementer.run_command")
+    @patch("src.agents.implementer.checkout_branch")
+    @patch("src.agents.implementer.branch_exists_on_remote")
+    @patch("src.agents.implementer.configure_git_user")
+    @patch("src.agents.implementer.clone_repo")
+    def test_detects_existing_branch(self, mock_clone, mock_config, mock_branch_exists, mock_checkout, mock_run_command):
+        mock_clone.invoke.return_value = {"success": True}
+        mock_branch_exists.invoke.return_value = True
+        mock_checkout.invoke.return_value = {"success": True}
+        mock_run_command.invoke.return_value = {"success": True, "stdout": "", "stderr": ""}
         
         agent = ImplementerAgent(llm=None)
         result = agent._clone_and_setup("/tmp/test", "DP-123")
@@ -187,15 +191,16 @@ class TestImplementerBranchDetection:
         assert result["success"]
         assert result["branch_exists"] is True
     
-    @patch("src.tools.filesystem.run_command")
-    def test_detects_new_branch(self, mock_run_command):
-        def run_side_effect(params):
-            cmd = params.get("command", "")
-            if "ls-remote" in cmd:
-                return {"success": True, "stdout": "", "stderr": ""}
-            return {"success": True, "stdout": "", "stderr": ""}
-        
-        mock_run_command.invoke.side_effect = run_side_effect
+    @patch("src.agents.implementer.run_command")
+    @patch("src.agents.implementer.checkout_branch")
+    @patch("src.agents.implementer.branch_exists_on_remote")
+    @patch("src.agents.implementer.configure_git_user")
+    @patch("src.agents.implementer.clone_repo")
+    def test_detects_new_branch(self, mock_clone, mock_config, mock_branch_exists, mock_checkout, mock_run_command):
+        mock_clone.invoke.return_value = {"success": True}
+        mock_branch_exists.invoke.return_value = False
+        mock_checkout.invoke.return_value = {"success": True}
+        mock_run_command.invoke.return_value = {"success": True, "stdout": "", "stderr": ""}
         
         agent = ImplementerAgent(llm=None)
         result = agent._clone_and_setup("/tmp/test", "DP-123")
@@ -203,18 +208,24 @@ class TestImplementerBranchDetection:
         assert result["success"]
         assert result["branch_exists"] is False
     
-    @patch("src.tools.filesystem.run_command")
-    def test_skips_implementation_when_complete(self, mock_run_command):
+    @patch("src.agents.implementer.run_command")
+    @patch("src.agents.implementer.get_commit_log")
+    @patch("src.agents.implementer.checkout_branch")
+    @patch("src.agents.implementer.branch_exists_on_remote")
+    @patch("src.agents.implementer.configure_git_user")
+    @patch("src.agents.implementer.clone_repo")
+    def test_skips_implementation_when_complete(self, mock_clone, mock_config, mock_branch_exists, mock_checkout, mock_get_log, mock_run_command):
+        mock_clone.invoke.return_value = {"success": True}
+        mock_branch_exists.invoke.return_value = True
+        mock_checkout.invoke.return_value = {"success": True}
+        mock_get_log.invoke.return_value = "abc123 feat: implement component"
+        
         def run_side_effect(params):
             cmd = params.get("command", "")
-            if "ls-remote" in cmd:
-                return {"success": True, "stdout": "abc123 refs/heads/DP-123", "stderr": ""}
             if "find src" in cmd:
                 return {"success": True, "stdout": "src/Component.jsx", "stderr": ""}
             if "head -50" in cmd:
                 return {"success": True, "stdout": "const Component = () => <div>Hello</div>;", "stderr": ""}
-            if "git log" in cmd:
-                return {"success": True, "stdout": "abc123 feat: implement component", "stderr": ""}
             return {"success": True, "stdout": "", "stderr": ""}
         
         mock_run_command.invoke.side_effect = run_side_effect
@@ -263,5 +274,4 @@ class TestImplementerBranchDetection:
         
         assert "Prior Commits" in context
         assert "PR Comments" in context
-        assert "Code Review Comments" in context
         assert "Please fix styling" in context
