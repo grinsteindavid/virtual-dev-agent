@@ -27,14 +27,22 @@ def get_checkpointer() -> Optional[BaseCheckpointSaver]:
         return None
     
     try:
+        from langgraph.checkpoint.redis import RedisSaver
+        _checkpointer = RedisSaver(redis_url=config.redis.url)
+        logger.info(f"Redis checkpointer initialized: {config.redis.url}")
+        return _checkpointer
+        
+    except ImportError:
+        logger.warning("langgraph-checkpoint-redis not installed, using memory saver")
         from langgraph.checkpoint.memory import MemorySaver
         _checkpointer = MemorySaver()
-        logger.info("Using memory saver for checkpointing")
         return _checkpointer
         
     except Exception as e:
-        logger.warning(f"Failed to create checkpointer: {e}")
-        return None
+        logger.warning(f"Failed to connect to Redis: {e}, using memory saver")
+        from langgraph.checkpoint.memory import MemorySaver
+        _checkpointer = MemorySaver()
+        return _checkpointer
 
 
 def reset_checkpointer() -> None:
