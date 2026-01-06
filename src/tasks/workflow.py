@@ -39,6 +39,7 @@ def run_workflow_task(self, jira_ticket_id: str) -> dict:
             "status": result.get("status", "unknown"),
             "pr_url": result.get("pr_url"),
             "error": result.get("error"),
+            "confidence": result.get("confidence", {}),
         }
         
     except Exception as e:

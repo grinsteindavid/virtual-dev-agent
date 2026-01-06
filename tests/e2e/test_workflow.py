@@ -79,8 +79,15 @@ class TestWorkflowE2E:
         
         assert result["status"] in ("done", "failed", "planning", "implementing", "testing", "reporting")
         
+        confidence = result.get("confidence", {})
+        assert "routing" in confidence
+        assert "planning" in confidence
+        assert "implementation" in confidence
+        assert "testing" in confidence
+        
         if result["status"] == "done":
             assert result.get("pr_url")
+            assert confidence.get("overall", 0) > 0
     
     def test_workflow_with_skip_implementation(self, test_jira_ticket):
         """Test workflow with existing branch (skip_implementation=True)."""

@@ -26,6 +26,7 @@ class TaskResponse(BaseModel):
     status: str
     pr_url: Optional[str] = None
     error: Optional[str] = None
+    confidence: Optional[dict] = None
 
 
 def _get_task_response(task_id: str) -> TaskResponse:
@@ -55,6 +56,7 @@ def _get_task_response(task_id: str) -> TaskResponse:
             status=data.get("status", "done"),
             pr_url=data.get("pr_url"),
             error=data.get("error"),
+            confidence=data.get("confidence"),
         )
     
     if result.state == "FAILURE":

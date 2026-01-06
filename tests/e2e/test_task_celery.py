@@ -49,6 +49,9 @@ class TestTaskCelery:
         
         if result["status"] in ("done", "SUCCESS"):
             assert result.get("pr_url") or result.get("error") is None
+            confidence = result.get("confidence", {})
+            assert confidence, "Confidence scores should be returned"
+            assert confidence.get("overall", 0) > 0
     
     def test_workflow_handles_invalid_ticket(self, api_client, wait_for_task):
         """Test workflow handles invalid Jira ticket gracefully."""
