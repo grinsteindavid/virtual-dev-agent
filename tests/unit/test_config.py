@@ -63,14 +63,34 @@ class TestConfig:
         neither = LLMConfig(openai_api_key=None, anthropic_api_key=None)
         assert neither.is_valid is False
     
+    def test_redis_config_validation(self):
+        from src.config import RedisConfig
+        
+        valid = RedisConfig(url="redis://localhost:6379/0")
+        assert valid.is_valid is True
+        
+        invalid = RedisConfig(url="")
+        assert invalid.is_valid is False
+    
+    def test_workflow_config_validation(self):
+        from src.config import WorkflowConfig
+        
+        with_ticket = WorkflowConfig(ticket="DP-123")
+        assert with_ticket.has_ticket is True
+        
+        without_ticket = WorkflowConfig(ticket=None)
+        assert without_ticket.has_ticket is False
+    
     def test_config_validate_returns_errors(self):
-        from src.config import Config, GitHubConfig, JiraConfig, DiscordConfig, LLMConfig
+        from src.config import Config, GitHubConfig, JiraConfig, DiscordConfig, LLMConfig, RedisConfig, WorkflowConfig
         
         config = Config(
             github=GitHubConfig(token="", owner="", repo=""),
             jira=JiraConfig(url="", username="", api_token="", project=""),
             discord=DiscordConfig(webhook_url=""),
             llm=LLMConfig(openai_api_key=None, anthropic_api_key=None),
+            redis=RedisConfig(url="redis://localhost:6379/0"),
+            workflow=WorkflowConfig(ticket=None),
         )
         
         errors = config.validate()
