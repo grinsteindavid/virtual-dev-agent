@@ -29,6 +29,9 @@ class GitHubClient:
     def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """Make an HTTP request to GitHub API."""
         response = self._client.request(method, endpoint, **kwargs)
+        if response.status_code >= 400:
+            error_body = response.text
+            logger.error(f"GitHub API error {response.status_code}: {error_body}")
         response.raise_for_status()
         if response.status_code == 204:
             return {"success": True}

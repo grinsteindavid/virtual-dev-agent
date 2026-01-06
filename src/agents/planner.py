@@ -52,6 +52,8 @@ class PlannerAgent:
             state.jira_details["recent_comments"] = comments
             state.branch_name = state.jira_ticket_id
             
+            self._transition_to_in_progress(jira, state.jira_ticket_id)
+            
             fields = issue.get("fields", {})
             summary = fields.get("summary", "No summary")
             description = fields.get("description", "No description")
@@ -82,6 +84,22 @@ class PlannerAgent:
             state.status = "failed"
         
         return state
+    
+    def _transition_to_in_progress(self, jira: JiraClient, ticket_id: str) -> None:
+        """Transition Jira ticket to 'In Progress' status."""
+        try:
+            transitions = jira.get_transitions(ticket_id)
+            in_progress = next(
+                (t for t in transitions if "progress" in t["name"].lower()),
+                None,
+            )
+            if in_progress:
+                jira.transition_issue(ticket_id, in_progress["id"])
+                logger.info(f"Transitioned Jira to: {in_progress['name']}")
+            else:
+                logger.warning(f"No 'In Progress' transition found for {ticket_id}")
+        except Exception as e:
+            logger.warning(f"Failed to transition Jira to In Progress: {e}")
     
     def _format_comments(self, comments: list[dict]) -> str:
         """Format comments for inclusion in prompt."""
