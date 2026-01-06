@@ -4,6 +4,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from src.agents.state import AgentState
+from src.clients.github_client import GitHubClient, get_github_client
 from src.config import config
 from src.logger import get_logger
 
@@ -18,7 +19,7 @@ Branch: {branch_name}
 
 Implementation Plan:
 {implementation_plan}
-
+{context_section}
 Based on the plan, generate the code implementation. For each file you need to create or modify, provide:
 1. The file path (relative to project root)
 2. The complete file content
@@ -31,12 +32,31 @@ Focus on:
 
 Respond with the implementation details in a structured format."""
 
+COMPLETION_CHECK_PROMPT = """You are reviewing whether existing code satisfies Jira requirements.
+
+Jira Ticket: {ticket_key}
+Summary: {summary}
+Description: {description}
+
+Existing Implementation:
+{existing_code}
+
+Commit History:
+{commit_history}
+
+Does the existing code fully implement the Jira ticket requirements?
+Respond with JSON: {{"complete": true/false, "reason": "brief explanation"}}"""
+
 
 class ImplementerAgent:
     """Implements code changes based on the plan."""
     
-    def __init__(self, llm: BaseChatModel = None):
+    def __init__(self, llm: BaseChatModel = None, github_client: GitHubClient = None):
         self.llm = llm
+        self.github_client = github_client
+    
+    def _get_github_client(self) -> GitHubClient:
+        return self.github_client or get_github_client()
     
     def run(self, state: AgentState) -> AgentState:
         """Implement code changes based on the plan."""
@@ -52,13 +72,24 @@ class ImplementerAgent:
                 return state
             
             state.repo_path = repo_path
+            state.branch_exists = clone_result.get("branch_exists", False)
+            
+            if state.branch_exists:
+                state.existing_context = self._gather_existing_context(state)
+                
+                if self.llm and self._check_completion(state):
+                    logger.info("Implementer: existing code satisfies requirements, skipping")
+                    state.skip_implementation = True
+                    state.status = "implementing"
+                    state.confidence["implementation"] = 0.9
+                    return state
             
             if self.llm:
                 code_changes = self._generate_implementation(state)
             else:
                 code_changes = self._placeholder_implementation(state)
             
-            write_result = self._write_files(repo_path, code_changes)
+            self._write_files(repo_path, code_changes)
             
             state.code_changes = code_changes
             state.status = "implementing"
@@ -74,7 +105,7 @@ class ImplementerAgent:
         return state
     
     def _clone_and_setup(self, repo_path: str, branch_name: str) -> dict:
-        """Clone repository and set up branch."""
+        """Clone repository and set up branch, detecting if branch already exists."""
         from src.tools.filesystem import run_command
         
         owner = config.github.owner
@@ -89,29 +120,164 @@ class ImplementerAgent:
         if not result["success"]:
             return {"success": False, "error": result["stderr"]}
         
-        branch_result = run_command.invoke({
-            "command": f"git checkout -b {branch_name} || git checkout {branch_name}",
+        check_remote = run_command.invoke({
+            "command": f"git ls-remote --heads origin {branch_name}",
             "cwd": repo_path,
         })
+        branch_exists = bool(check_remote.get("stdout", "").strip())
         
-        install_result = run_command.invoke({
+        if branch_exists:
+            logger.info(f"Implementer: branch '{branch_name}' exists on remote, checking out")
+            run_command.invoke({
+                "command": f"git fetch origin {branch_name} && git checkout {branch_name}",
+                "cwd": repo_path,
+            })
+        else:
+            logger.info(f"Implementer: creating new branch '{branch_name}'")
+            run_command.invoke({
+                "command": f"git checkout -b {branch_name}",
+                "cwd": repo_path,
+            })
+        
+        run_command.invoke({
             "command": "npm install",
             "cwd": repo_path,
             "timeout": 180,
         })
         
-        return {"success": True, "repo_path": repo_path}
+        return {"success": True, "repo_path": repo_path, "branch_exists": branch_exists}
+    
+    def _gather_existing_context(self, state: AgentState) -> dict:
+        """Gather context from existing branch: commits, PR comments."""
+        context = {"commits": "", "pr_comments": "", "review_comments": ""}
+        
+        try:
+            from src.tools.filesystem import run_command
+            
+            log_result = run_command.invoke({
+                "command": "git log --oneline -n 10",
+                "cwd": state.repo_path,
+            })
+            context["commits"] = log_result.get("stdout", "")[:1000]
+            
+            github = self._get_github_client()
+            prs = github.list_pull_requests(state="all")
+            matching_pr = next(
+                (pr for pr in prs if pr["head"]["ref"] == state.branch_name),
+                None,
+            )
+            
+            if matching_pr:
+                pr_number = matching_pr["number"]
+                comments = github.get_pr_comments(pr_number)
+                review_comments = github.get_pr_review_comments(pr_number)
+                
+                context["pr_comments"] = "\n".join(
+                    f"- {c['user']}: {c['body']}" for c in comments[:5]
+                )
+                context["review_comments"] = "\n".join(
+                    f"- {c['user']} on {c['path']}: {c['body']}" for c in review_comments[:5]
+                )
+                
+                logger.info(f"Implementer: found PR #{pr_number} with {len(comments)} comments")
+        except Exception as e:
+            logger.warning(f"Implementer: failed to gather context: {e}")
+        
+        return context
+    
+    def _check_completion(self, state: AgentState) -> bool:
+        """Check if existing code already satisfies Jira requirements."""
+        from src.tools.filesystem import run_command
+        
+        fields = state.jira_details.get("fields", {})
+        summary = fields.get("summary", "")
+        description = fields.get("description", "")
+        
+        ls_result = run_command.invoke({
+            "command": "find src -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' | head -20",
+            "cwd": state.repo_path,
+        })
+        files = ls_result.get("stdout", "").strip().split("\n")[:5]
+        
+        existing_code = ""
+        for f in files:
+            if f:
+                read_result = run_command.invoke({
+                    "command": f"head -50 {f}",
+                    "cwd": state.repo_path,
+                })
+                existing_code += f"\n--- {f} ---\n{read_result.get('stdout', '')[:500]}"
+        
+        prompt = COMPLETION_CHECK_PROMPT.format(
+            ticket_key=state.jira_ticket_id,
+            summary=summary,
+            description=description[:1000] if description else "No description",
+            existing_code=existing_code[:2000],
+            commit_history=state.existing_context.get("commits", ""),
+        )
+        
+        messages = [
+            SystemMessage(content="You evaluate if code satisfies requirements."),
+            HumanMessage(content=prompt),
+        ]
+        
+        response = self.llm.invoke(messages)
+        content = response.content.lower()
+        
+        import json
+        import re
+        try:
+            match = re.search(r'\{[^}]+\}', response.content, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                is_complete = data.get("complete", False)
+                reason = data.get("reason", "")
+                logger.info(f"Implementer: completion check: {is_complete} - {reason}")
+                return is_complete
+        except (json.JSONDecodeError, ValueError):
+            pass
+        
+        return '"complete": true' in content or '"complete":true' in content
+    
+    def _build_context_section(self, state: AgentState) -> str:
+        """Build context section for implementation prompt."""
+        sections = []
+        
+        jira_comments = state.jira_details.get("recent_comments", [])
+        if jira_comments:
+            comment_lines = "\n".join(
+                f"- {c.get('author', 'Unknown')}: {c.get('body', '')[:200]}"
+                for c in jira_comments[:3]
+            )
+            sections.append(f"\n## Jira Comments (Additional Requirements)\n{comment_lines}")
+        
+        if state.fix_suggestions:
+            sections.append(f"\n## Previous Test Failures\n{state.test_results.get('output', '')[-1000:]}")
+            sections.append(f"\n## Fix Suggestions\n{state.fix_suggestions}")
+        
+        if state.existing_context:
+            if state.existing_context.get("commits"):
+                sections.append(f"\n## Prior Commits on Branch\n{state.existing_context['commits']}")
+            if state.existing_context.get("pr_comments"):
+                sections.append(f"\n## PR Comments\n{state.existing_context['pr_comments']}")
+            if state.existing_context.get("review_comments"):
+                sections.append(f"\n## Code Review Comments\n{state.existing_context['review_comments']}")
+        
+        return "\n".join(sections)
     
     def _generate_implementation(self, state: AgentState) -> list[dict]:
         """Generate code implementation using LLM."""
         fields = state.jira_details.get("fields", {})
         summary = fields.get("summary", "Feature implementation")
         
+        context_section = self._build_context_section(state)
+        
         prompt = IMPLEMENTATION_PROMPT.format(
             ticket_key=state.jira_ticket_id,
             summary=summary,
             branch_name=state.branch_name,
             implementation_plan=state.implementation_plan,
+            context_section=context_section,
         )
         
         messages = [

@@ -99,8 +99,8 @@ class TesterAgent:
         }
     
     def _attempt_fix(self, state: AgentState, test_result: dict) -> None:
-        """Attempt to fix failing tests using LLM."""
-        logger.info("Tester: attempting to fix failures")
+        """Generate fix suggestions for failing tests and store in state."""
+        logger.info("Tester: generating fix suggestions")
         
         code_changes_str = "\n".join([
             f"File: {c['file']}\n```\n{c['content'][:500]}...\n```"
@@ -120,4 +120,5 @@ class TesterAgent:
         
         response = self.llm.invoke(messages)
         
-        logger.info("Tester: generated fix suggestions (not auto-applying)")
+        state.fix_suggestions = response.content[:3000]
+        logger.info(f"Tester: stored fix suggestions ({len(state.fix_suggestions)} chars)")

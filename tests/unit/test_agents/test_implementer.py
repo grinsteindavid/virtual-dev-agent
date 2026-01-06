@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 from src.agents.state import AgentState
 from src.agents.implementer import ImplementerAgent
 from tests.mocks.mock_llm import FakeLLM
+from tests.mocks.mock_github import MockGitHubClient
 
 
 class TestImplementerAgent:
@@ -165,3 +166,102 @@ export default () => <div>Widget</div>;
         
         assert result.repo_path
         assert "DP-123" in result.repo_path
+
+
+class TestImplementerBranchDetection:
+    """Tests for branch detection and existing context."""
+    
+    @patch("src.tools.filesystem.run_command")
+    def test_detects_existing_branch(self, mock_run_command):
+        def run_side_effect(params):
+            cmd = params.get("command", "")
+            if "ls-remote" in cmd:
+                return {"success": True, "stdout": "abc123 refs/heads/DP-123", "stderr": ""}
+            return {"success": True, "stdout": "", "stderr": ""}
+        
+        mock_run_command.invoke.side_effect = run_side_effect
+        
+        agent = ImplementerAgent(llm=None)
+        result = agent._clone_and_setup("/tmp/test", "DP-123")
+        
+        assert result["success"]
+        assert result["branch_exists"] is True
+    
+    @patch("src.tools.filesystem.run_command")
+    def test_detects_new_branch(self, mock_run_command):
+        def run_side_effect(params):
+            cmd = params.get("command", "")
+            if "ls-remote" in cmd:
+                return {"success": True, "stdout": "", "stderr": ""}
+            return {"success": True, "stdout": "", "stderr": ""}
+        
+        mock_run_command.invoke.side_effect = run_side_effect
+        
+        agent = ImplementerAgent(llm=None)
+        result = agent._clone_and_setup("/tmp/test", "DP-123")
+        
+        assert result["success"]
+        assert result["branch_exists"] is False
+    
+    @patch("src.tools.filesystem.run_command")
+    def test_skips_implementation_when_complete(self, mock_run_command):
+        def run_side_effect(params):
+            cmd = params.get("command", "")
+            if "ls-remote" in cmd:
+                return {"success": True, "stdout": "abc123 refs/heads/DP-123", "stderr": ""}
+            if "find src" in cmd:
+                return {"success": True, "stdout": "src/Component.jsx", "stderr": ""}
+            if "head -50" in cmd:
+                return {"success": True, "stdout": "const Component = () => <div>Hello</div>;", "stderr": ""}
+            if "git log" in cmd:
+                return {"success": True, "stdout": "abc123 feat: implement component", "stderr": ""}
+            return {"success": True, "stdout": "", "stderr": ""}
+        
+        mock_run_command.invoke.side_effect = run_side_effect
+        
+        llm = FakeLLM(response='{"complete": true, "reason": "Component implemented"}')
+        github = MockGitHubClient()
+        agent = ImplementerAgent(llm=llm, github_client=github)
+        
+        state = AgentState(
+            jira_ticket_id="DP-123",
+            jira_details={"fields": {"summary": "Create Component"}},
+            branch_name="DP-123",
+            implementation_plan="Create a component",
+        )
+        
+        result = agent.run(state)
+        
+        assert result.skip_implementation is True
+        assert result.branch_exists is True
+        assert result.confidence["implementation"] == 0.9
+    
+    def test_build_context_section_includes_fix_suggestions(self):
+        agent = ImplementerAgent(llm=None)
+        state = AgentState(
+            fix_suggestions="Fix the import statement",
+            test_results={"output": "Error: cannot find module"},
+        )
+        
+        context = agent._build_context_section(state)
+        
+        assert "Fix Suggestions" in context
+        assert "Fix the import" in context
+        assert "Test Failures" in context
+    
+    def test_build_context_section_includes_pr_comments(self):
+        agent = ImplementerAgent(llm=None)
+        state = AgentState(
+            existing_context={
+                "commits": "abc123 initial commit",
+                "pr_comments": "- user: Please fix styling",
+                "review_comments": "- reviewer on file.js: Add tests",
+            }
+        )
+        
+        context = agent._build_context_section(state)
+        
+        assert "Prior Commits" in context
+        assert "PR Comments" in context
+        assert "Code Review Comments" in context
+        assert "Please fix styling" in context

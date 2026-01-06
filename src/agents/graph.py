@@ -87,6 +87,9 @@ def create_dev_workflow(llm=None, checkpointer=None, use_checkpointer=True):
         return {
             "repo_path": result.repo_path,
             "code_changes": result.code_changes,
+            "branch_exists": result.branch_exists,
+            "existing_context": result.existing_context,
+            "skip_implementation": result.skip_implementation,
             "status": result.status,
             "error": result.error,
             "confidence": conf,
@@ -101,6 +104,7 @@ def create_dev_workflow(llm=None, checkpointer=None, use_checkpointer=True):
         return {
             "test_results": result.test_results,
             "test_iterations": result.test_iterations,
+            "fix_suggestions": result.fix_suggestions,
             "status": result.status,
             "error": result.error,
             "confidence": conf,
@@ -125,7 +129,7 @@ def create_dev_workflow(llm=None, checkpointer=None, use_checkpointer=True):
         route = state.get("route", "planner")
         if route == "done":
             return "__end__"
-        if state.get("status") == "failed":
+        if state.get("status") in ("failed", "done"):
             return "__end__"
         return route
     

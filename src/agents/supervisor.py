@@ -21,10 +21,11 @@ Analyze the current state and decide which agent should handle the next step:
   
 - **implementer**: Code implementation - clone repo, create branch, write code
   - Use when: implementation plan exists but no code changes yet
+  - Also use when: tests failed and fix_suggestions exist (implementer will use them)
   
-- **tester**: Run tests and fix failures
-  - Use when: code changes exist but tests haven't passed
-  - Also use when: tests failed and need iteration (max 3 iterations)
+- **tester**: Run tests
+  - Use when: code changes exist but tests haven't run yet
+  - Use when: skip_implementation is True (existing code needs testing)
   
 - **reporter**: Create PR, update Jira, notify Discord
   - Use when: tests have passed successfully
@@ -38,8 +39,10 @@ Current state:
 - Has Jira Details: {has_jira_details}
 - Has Implementation Plan: {has_plan}
 - Has Code Changes: {has_code_changes}
+- Skip Implementation: {skip_implementation}
 - Test Results: {test_results}
 - Test Iterations: {test_iterations}
+- Has Fix Suggestions: {has_fix_suggestions}
 - Has PR URL: {has_pr_url}
 - Error: {error}
 
@@ -66,8 +69,10 @@ class SupervisorAgent:
             has_jira_details=bool(state.jira_details),
             has_plan=bool(state.implementation_plan),
             has_code_changes=bool(state.code_changes),
+            skip_implementation=state.skip_implementation,
             test_results=f"passed={test_passed}, iterations={state.test_iterations}" if state.test_results else "not run",
             test_iterations=state.test_iterations,
+            has_fix_suggestions=bool(state.fix_suggestions),
             has_pr_url=bool(state.pr_url),
             error=state.error or "(none)",
         )
@@ -126,6 +131,10 @@ class SupervisorAgent:
             return "done"
         if state.test_results and state.test_results.get("success"):
             return "reporter"
+        if state.skip_implementation:
+            return "tester"
+        if state.test_results and not state.test_results.get("success") and state.fix_suggestions:
+            return "implementer"
         if state.code_changes:
             return "tester"
         if state.implementation_plan:

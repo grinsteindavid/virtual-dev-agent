@@ -76,3 +76,37 @@ class TestPlannerAgent:
         result = agent.run(state)
         
         assert result.confidence["planning"] == 0.8
+    
+    def test_fetches_and_stores_comments(self, mock_jira, fake_llm):
+        agent = PlannerAgent(jira_client=mock_jira, llm=fake_llm)
+        state = AgentState(jira_ticket_id="DP-123")
+        
+        result = agent.run(state)
+        
+        assert ("get_comments", "DP-123", 5) in mock_jira.calls
+        assert "recent_comments" in result.jira_details
+        assert len(result.jira_details["recent_comments"]) > 0
+    
+    def test_includes_comments_in_llm_prompt(self, mock_jira, fake_llm):
+        fake_llm.response = "Plan with comments considered"
+        agent = PlannerAgent(jira_client=mock_jira, llm=fake_llm)
+        state = AgentState(jira_ticket_id="DP-123")
+        
+        agent.run(state)
+        
+        prompt_content = fake_llm.calls[0][1].content
+        assert "Product Owner" in prompt_content or "Recent Comments" in prompt_content
+    
+    def test_format_comments_returns_empty_for_no_comments(self):
+        agent = PlannerAgent(jira_client=None, llm=None)
+        result = agent._format_comments([])
+        assert result == ""
+    
+    def test_format_comments_includes_author_and_body(self):
+        agent = PlannerAgent(jira_client=None, llm=None)
+        comments = [
+            {"author": "User1", "body": "Comment text here"},
+        ]
+        result = agent._format_comments(comments)
+        assert "User1" in result
+        assert "Comment text" in result

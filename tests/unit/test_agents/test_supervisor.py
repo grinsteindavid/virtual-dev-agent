@@ -125,3 +125,31 @@ class TestSupervisorAgent:
         result = supervisor.route(state)
         
         assert result.route == "planner"
+    
+    def test_fallback_to_tester_when_skip_implementation(self):
+        llm = FakeLLM(response="garbage")
+        supervisor = SupervisorAgent(llm=llm)
+        state = AgentState(
+            jira_ticket_id="DP-123",
+            implementation_plan="plan",
+            skip_implementation=True,
+        )
+        
+        result = supervisor.route(state)
+        
+        assert result.route == "tester"
+    
+    def test_fallback_to_implementer_with_fix_suggestions(self):
+        llm = FakeLLM(response="invalid")
+        supervisor = SupervisorAgent(llm=llm)
+        state = AgentState(
+            jira_ticket_id="DP-123",
+            implementation_plan="plan",
+            code_changes=[{"file": "test.js"}],
+            test_results={"success": False},
+            fix_suggestions="Fix the import statement",
+        )
+        
+        result = supervisor.route(state)
+        
+        assert result.route == "implementer"

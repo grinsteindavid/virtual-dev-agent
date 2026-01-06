@@ -150,6 +150,62 @@ class GitHubClient:
             for pr in data
         ]
     
+    def get_pr_comments(
+        self,
+        pull_number: int,
+        limit: int = 20,
+        owner: str | None = None,
+        repo: str | None = None,
+    ) -> list[dict]:
+        """Get comments on a pull request."""
+        owner = owner or self.owner
+        repo = repo or self.repo
+        logger.info(f"get_pr_comments: owner={owner} repo={repo} pull_number={pull_number}")
+        data = self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/issues/{pull_number}/comments",
+            params={"per_page": limit},
+        )
+        logger.info(f"get_pr_comments: success count={len(data)}")
+        return [
+            {
+                "id": comment["id"],
+                "user": comment["user"]["login"],
+                "body": comment["body"][:500],
+                "created_at": comment["created_at"],
+            }
+            for comment in data
+        ]
+    
+    def get_pr_review_comments(
+        self,
+        pull_number: int,
+        limit: int = 30,
+        owner: str | None = None,
+        repo: str | None = None,
+    ) -> list[dict]:
+        """Get review comments (inline code comments) on a pull request."""
+        owner = owner or self.owner
+        repo = repo or self.repo
+        logger.info(f"get_pr_review_comments: owner={owner} repo={repo} pull_number={pull_number}")
+        data = self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/pulls/{pull_number}/comments",
+            params={"per_page": limit},
+        )
+        logger.info(f"get_pr_review_comments: success count={len(data)}")
+        return [
+            {
+                "id": comment["id"],
+                "user": comment["user"]["login"],
+                "body": comment["body"][:500],
+                "path": comment.get("path", ""),
+                "line": comment.get("line"),
+                "created_at": comment["created_at"],
+            }
+            for comment in data
+        ]
+    
     def close(self):
         """Close the HTTP client."""
         self._client.close()

@@ -84,5 +84,29 @@ class MockGitHubClient:
         self.calls.append(("list_pull_requests", state, limit, owner, repo))
         return [MOCK_PR]
     
+    def get_pr_comments(
+        self,
+        pull_number: int,
+        limit: int = 20,
+        owner: str = None,
+        repo: str = None,
+    ) -> list[dict]:
+        self.calls.append(("get_pr_comments", pull_number, limit, owner, repo))
+        return [
+            {"id": 1, "user": "reviewer", "body": "Looks good!", "created_at": "2024-01-01T00:00:00Z"},
+        ]
+    
+    def get_pr_review_comments(
+        self,
+        pull_number: int,
+        limit: int = 30,
+        owner: str = None,
+        repo: str = None,
+    ) -> list[dict]:
+        self.calls.append(("get_pr_review_comments", pull_number, limit, owner, repo))
+        return [
+            {"id": 2, "user": "reviewer", "body": "Add tests here", "path": "src/Component.jsx", "line": 10, "created_at": "2024-01-01T00:00:00Z"},
+        ]
+    
     def close(self):
         pass

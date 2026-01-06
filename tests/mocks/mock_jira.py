@@ -26,6 +26,11 @@ MOCK_COMMENT = {
     "body": "Test comment",
 }
 
+MOCK_COMMENTS = [
+    {"id": "1001", "author": "Product Owner", "body": "Please also add error handling for empty names", "created": "2024-01-02T10:00:00Z"},
+    {"id": "1002", "author": "Tech Lead", "body": "Consider adding unit tests for edge cases", "created": "2024-01-02T11:00:00Z"},
+]
+
 
 class MockJiraClient:
     """Mock Jira client - no network calls."""
@@ -47,6 +52,10 @@ class MockJiraClient:
     def add_comment(self, issue_key: str, comment: str) -> dict:
         self.calls.append(("add_comment", issue_key, comment))
         return {**MOCK_COMMENT, "body": comment}
+    
+    def get_comments(self, issue_key: str, limit: int = 10) -> list[dict]:
+        self.calls.append(("get_comments", issue_key, limit))
+        return MOCK_COMMENTS[:limit]
     
     def get_transitions(self, issue_key: str) -> list[dict]:
         self.calls.append(("get_transitions", issue_key))

@@ -94,6 +94,24 @@ class JiraClient:
         logger.info(f"add_comment: success id={data.get('id')}")
         return {"id": data.get("id"), "body": data.get("body")}
     
+    def get_comments(self, issue_key: str, limit: int = 10) -> list[dict]:
+        """Get comments for an issue, most recent first."""
+        logger.info(f"get_comments: issue_key={issue_key} limit={limit}")
+        data = self._request("GET", f"/issue/{issue_key}/comment")
+        comments = data.get("comments", [])
+        recent = comments[-limit:] if len(comments) > limit else comments
+        recent.reverse()
+        logger.info(f"get_comments: success count={len(recent)}")
+        return [
+            {
+                "id": c.get("id"),
+                "author": c.get("author", {}).get("displayName", "Unknown"),
+                "body": c.get("body", "")[:500],
+                "created": c.get("created"),
+            }
+            for c in recent
+        ]
+    
     def get_transitions(self, issue_key: str) -> list[dict]:
         """Get available transitions for an issue."""
         logger.info(f"get_transitions: issue_key={issue_key}")

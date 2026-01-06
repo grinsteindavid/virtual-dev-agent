@@ -17,14 +17,15 @@ Summary: {summary}
 Description: {description}
 Status: {status}
 Priority: {priority}
-
+{comments_section}
 Create a step-by-step implementation plan that includes:
 1. What components/files need to be created or modified
 2. Key implementation details
 3. Test cases to write
 4. Any edge cases to consider
 
-Keep the plan concise and actionable. Focus on the essential steps."""
+Keep the plan concise and actionable. Focus on the essential steps.
+If there are comments with additional requirements or clarifications, incorporate them into the plan."""
 
 
 class PlannerAgent:
@@ -45,8 +46,10 @@ class PlannerAgent:
         try:
             jira = self._get_jira_client()
             issue = jira.get_issue(state.jira_ticket_id)
+            comments = jira.get_comments(state.jira_ticket_id, limit=5)
             
             state.jira_details = issue
+            state.jira_details["recent_comments"] = comments
             state.branch_name = state.jira_ticket_id
             
             fields = issue.get("fields", {})
@@ -62,6 +65,7 @@ class PlannerAgent:
                     description=description,
                     status=status,
                     priority=priority,
+                    comments=comments,
                 )
             else:
                 plan = self._default_plan(summary, description)
@@ -70,7 +74,7 @@ class PlannerAgent:
             state.status = "planning"
             state.confidence["planning"] = 0.8
             
-            logger.info(f"Planner: completed for {state.jira_ticket_id}")
+            logger.info(f"Planner: completed for {state.jira_ticket_id} with {len(comments)} comments")
             
         except Exception as e:
             logger.error(f"Planner error: {e}")
@@ -79,6 +83,17 @@ class PlannerAgent:
         
         return state
     
+    def _format_comments(self, comments: list[dict]) -> str:
+        """Format comments for inclusion in prompt."""
+        if not comments:
+            return ""
+        lines = ["\nRecent Comments (newest first):"]
+        for c in comments:
+            author = c.get("author", "Unknown")
+            body = c.get("body", "")[:300]
+            lines.append(f"- {author}: {body}")
+        return "\n".join(lines) + "\n"
+    
     def _generate_plan(
         self,
         ticket_key: str,
@@ -86,14 +101,18 @@ class PlannerAgent:
         description: str,
         status: str,
         priority: str,
+        comments: list[dict] = None,
     ) -> str:
         """Generate implementation plan using LLM."""
+        comments_section = self._format_comments(comments or [])
+        
         prompt = PLANNING_PROMPT.format(
             ticket_key=ticket_key,
             summary=summary,
             description=description if description else "No description provided",
             status=status,
             priority=priority,
+            comments_section=comments_section,
         )
         
         messages = [
